@@ -17,9 +17,11 @@ This roadmap uses **learning orbits** — concentric spirals that weave notebook
 | **EV** | `evals/` | 22 | Evaluation, benchmarking, reliability |
 | **FT** | `finetuning/` | 22 | Post-training & adapter tuning |
 | **MM** | `multimodal/` | 22 | Vision, audio, video systems |
-| **SY** | `systems/` | 22 | Inference, serving, runtime engineering |
+| **SY** | `systems/` | 24 | Inference, serving, runtime engineering + practitioner guides |
 
-**Total: ~183 notebooks across 8 domains**
+**Total: ~190 notebooks across 8 domains**
+
+> 🆕 **New in Systems**: `00_colab_pro_survival_guide` (GPU budgeting, session management, caching) and `00_debugging_playbook` (failure patterns + diagnostic toolkit across all domains). Start with these if using Colab Pro.
 
 ---
 
