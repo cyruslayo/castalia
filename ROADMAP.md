@@ -6,10 +6,11 @@ Traditional linear paths teach each module in isolation: finish all of prompt en
 
 This roadmap uses **learning orbits** — concentric spirals that weave notebooks from all 7 folders together around a shared theme. Each orbit introduces concepts at a level that reinforces and contextualizes what came before. You revisit topics (prompting, evaluation, retrieval) at increasing depth as your mental model grows.
 
-### The 7 Folders (Domains)
+### The 8 Folders (Domains)
 
 | Code | Folder | Notebooks | Focus |
 |------|--------|-----------|-------|
+| **FN** | `foundations/` | 7 | First-principles: transformers, tokenization, embeddings, retrieval theory |
 | **PE** | `prompt-engineering/` | 22 | Prompt design, templates, techniques |
 | **RAG** | `rag/` | 29+ | Retrieval-augmented generation |
 | **AG** | `agents/` | 37 | Agentic AI design & engineering |
@@ -18,7 +19,27 @@ This roadmap uses **learning orbits** — concentric spirals that weave notebook
 | **MM** | `multimodal/` | 22 | Vision, audio, video systems |
 | **SY** | `systems/` | 22 | Inference, serving, runtime engineering |
 
-**Total: ~176 notebooks across 7 domains**
+**Total: ~183 notebooks across 8 domains**
+
+---
+
+## Orbit -1 — Foundations: First Principles Before Frameworks
+
+**Goal**: Build the conceptual bedrock that makes everything else make sense. These notebooks derive the *why* behind every tool and technique used in Orbits 0–7. Complete this orbit if you want to understand, not just use.
+
+| # | Notebook | Domain | What You Gain |
+|---|----------|--------|---------------|
+| 1 | [foundations/00_how_llms_work.ipynb](foundations/00_how_llms_work.ipynb) | FN | Mental models for transformers, next-token prediction, why prompts work |
+| 2 | [foundations/01_tokenization_deep_dive.ipynb](foundations/01_tokenization_deep_dive.ipynb) | FN | BPE from scratch, vocabulary effects on reasoning, token economics |
+| 3 | [foundations/02_embeddings_and_vector_spaces.ipynb](foundations/02_embeddings_and_vector_spaces.ipynb) | FN | Embedding geometry, similarity metrics derived, anisotropy intuition |
+| 4 | [foundations/03_sampling_and_decoding.ipynb](foundations/03_sampling_and_decoding.ipynb) | FN | Temperature, top-k/p, beam search — every knob explained from first principles |
+| 5 | [foundations/04_information_retrieval_theory.ipynb](foundations/04_information_retrieval_theory.ipynb) | FN | TF-IDF, BM25, inverted indices — the retrieval fundamentals behind RAG |
+| 6 | [foundations/05_attention_and_context.ipynb](foundations/05_attention_and_context.ipynb) | FN | Self-attention from scratch, KV cache, context windows, positional encodings |
+| 7 | [foundations/06_scaling_laws_and_model_selection.ipynb](foundations/06_scaling_laws_and_model_selection.ipynb) | FN | Scaling laws, VRAM budgeting, quantization, model selection framework |
+
+**Checkpoint**: You now understand *why* transformers work, *how* text becomes numbers, *what* retrieval really is, and *when* to choose which model. Every decision in the orbits ahead will make intuitive sense.
+
+> 💡 **When to use this orbit**: Start here if you're new to AI engineering, or jump back here whenever a later notebook introduces a concept you want to understand more deeply. Each foundations notebook is cross-referenced from the orbits that depend on it.
 
 ---
 

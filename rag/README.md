@@ -21,19 +21,15 @@
 | 15 | Context Enrichment 📚 | Document Augmentation | [document_augmentation.ipynb](document_augmentation.ipynb) |
 | 16 | Advanced Retrieval 🚀 | Fusion Retrieval | [fusion_retrieval.ipynb](fusion_retrieval.ipynb) |
 | 17 | Advanced Retrieval 🚀 | Reranking | [reranking.ipynb](reranking.ipynb) |
-| 18 | Advanced Retrieval 🚀 | Multi-faceted Filtering | [multi_faceted_filtering.ipynb](multi_faceted_filtering.ipynb) |
-| 19 | Advanced Retrieval 🚀 | Hierarchical Indices | [hierarchical_indices.ipynb](hierarchical_indices.ipynb) |
-| 20 | Advanced Retrieval 🚀 | Ensemble Retrieval | [ensemble_retrieval.ipynb](ensemble_retrieval.ipynb) |
-| 21 | Advanced Retrieval 🚀 | Dartboard Retrieval | [dartboard.ipynb](dartboard.ipynb) |
-| 22 | Advanced Retrieval 🚀 | Multi-modal RAG with Captioning | [multi_model_rag_with_captioning.ipynb](multi_model_rag_with_captioning.ipynb) |
-| 23 | Iterative Techniques 🔁 | Retrieval with Feedback Loop | [retrieval_with_feedback_loop.ipynb](retrieval_with_feedback_loop.ipynb) |
-| 24 | Iterative Techniques 🔁 | Adaptive Retrieval | [adaptive_retrieval.ipynb](adaptive_retrieval.ipynb) |
-| 25 | Iterative Retrieval 🔄 | Iterative Retrieval | [iterative_retrieval.ipynb](iterative_retrieval.ipynb) |
-| 26 | Evaluation 📊 | DeepEval | [evaluation_deep_eval.ipynb](evaluation_deep_eval.ipynb) |
-| 27 | Evaluation 📊 | GroUSE | [evaluation_grouse.ipynb](evaluation_grouse.ipynb) |
-| 28 | Explainability 🔬 | Explainable Retrieval | [explainable_retrieval.ipynb](explainable_retrieval.ipynb) |
-| 29 | Advanced Architecture 🏗️ | Graph RAG with LangChain | [graph_rag.ipynb](graph_rag.ipynb) |
-| 30 | Advanced Architecture 🏗️ | Microsoft GraphRAG | [Microsoft_GraphRag.ipynb](Microsoft_GraphRag.ipynb) |
-| 31 | Advanced Architecture 🏗️ | RAPTOR | [raptor.ipynb](raptor.ipynb) |
-| 32 | Advanced Architecture 🏗️ | Self-RAG | [self_rag.ipynb](self_rag.ipynb) |
-| 33 | Advanced Architecture 🏗️ | Corrective RAG (CRAG) | [crag.ipynb](crag.ipynb) |
+| 18 | Advanced Retrieval 🚀 | Hierarchical Indices | [hierarchical_indices.ipynb](hierarchical_indices.ipynb) |
+| 19 | Advanced Retrieval 🚀 | Dartboard Retrieval | [dartboard.ipynb](dartboard.ipynb) |
+| 20 | Advanced Retrieval 🚀 | Multi-modal RAG with Captioning | [multi_model_rag_with_captioning.ipynb](multi_model_rag_with_captioning.ipynb) |
+| 21 | Advanced Retrieval 🚀 | Multi-modal RAG with ColPali | [multi_model_rag_with_colpali.ipynb](multi_model_rag_with_colpali.ipynb) |
+| 22 | Iterative Techniques 🔁 | Retrieval with Feedback Loop | [retrieval_with_feedback_loop.ipynb](retrieval_with_feedback_loop.ipynb) |
+| 23 | Iterative Techniques 🔁 | Adaptive Retrieval | [adaptive_retrieval.ipynb](adaptive_retrieval.ipynb) |
+| 24 | Explainability 🔬 | Explainable Retrieval | [explainable_retrieval.ipynb](explainable_retrieval.ipynb) |
+| 25 | Advanced Architecture 🏗️ | Graph RAG with LangChain | [graph_rag.ipynb](graph_rag.ipynb) |
+| 26 | Advanced Architecture 🏗️ | Microsoft GraphRAG | [Microsoft_GraphRag.ipynb](Microsoft_GraphRag.ipynb) |
+| 27 | Advanced Architecture 🏗️ | RAPTOR | [raptor.ipynb](raptor.ipynb) |
+| 28 | Advanced Architecture 🏗️ | Self-RAG | [self_rag.ipynb](self_rag.ipynb) |
+| 29 | Advanced Architecture 🏗️ | Corrective RAG (CRAG) | [crag.ipynb](crag.ipynb) |
