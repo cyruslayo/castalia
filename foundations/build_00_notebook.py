@@ -1,0 +1,989 @@
+"""Generate 00_how_llms_work.ipynb for the Castalia foundations track."""
+import json
+import pathlib
+
+
+def md(lines: list[str]) -> dict:
+    return {"cell_type": "markdown", "metadata": {}, "source": lines}
+
+
+def code(lines: list[str]) -> dict:
+    return {
+        "cell_type": "code",
+        "execution_count": None,
+        "metadata": {},
+        "outputs": [],
+        "source": lines,
+    }
+
+
+cells: list[dict] = []
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Cell 0 — Title
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+cells.append(md([
+    "# 00 — How LLMs Actually Work: Mental Models for AI Engineers\n",
+    "\n",
+    "> **Orbit -1 (Foundations)** · **Difficulty**: Beginner · **Reading time**: ~25 min\n",
+    "\n",
+    "[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)]"
+    "(https://colab.research.google.com/github/cyruslayo/castalia/blob/main/"
+    "foundations/00_how_llms_work.ipynb)\n",
+    "\n",
+    "**What you will learn**:\n",
+    "- The transformer as a next-token prediction machine\n",
+    "- Why \"predicting the next word\" produces intelligent behavior\n",
+    "- The generation pipeline: tokenize → embed → transform → predict → sample → decode\n",
+    "- What temperature, top-p, and top-k actually control\n",
+    "- Mental models that make prompt engineering, RAG, and finetuning intuitive",
+]))
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Cell 1 — Setup
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+cells.append(code([
+    "# @title Setup — Run this cell first\n",
+    "# --- Google Colab Setup ---\n",
+    '!pip install -q "transformers>=4.51.0" "accelerate>=0.30.0" \\\n',
+    '    "bitsandbytes>=0.43.0" "torch>=2.1.0" "numpy>=1.24.0" \\\n',
+    '    "matplotlib>=3.7.0"\n',
+    "\n",
+    "import warnings\n",
+    'warnings.filterwarnings("ignore", category=FutureWarning)\n',
+    "\n",
+    "import numpy as np\n",
+    "import matplotlib.pyplot as plt\n",
+    "import torch\n",
+    "import torch.nn.functional as F\n",
+    "from transformers import AutoTokenizer, AutoModelForCausalLM\n",
+    "\n",
+    "# Mount Google Drive for model caching\n",
+    "from google.colab import drive\n",
+    'drive.mount("/content/drive", force_remount=False)\n',
+    "\n",
+    "import os\n",
+    'CACHE_DIR = "/content/drive/MyDrive/models"\n',
+    "os.makedirs(CACHE_DIR, exist_ok=True)\n",
+    'os.environ["HF_HOME"] = CACHE_DIR\n',
+    "\n",
+    "# Verify GPU\n",
+    'device = "cuda" if torch.cuda.is_available() else "cpu"\n',
+    'if device == "cuda":\n',
+    "    gpu_name = torch.cuda.get_device_name(0)\n",
+    "    vram_gb = torch.cuda.get_device_properties(0).total_mem / 1e9\n",
+    '    print(f"✓ GPU: {gpu_name} — {vram_gb:.1f} GB VRAM")\n',
+    "else:\n",
+    '    print("⚠ No GPU detected — notebook will run slower but still works")\n',
+    "\n",
+    'print(f"✓ PyTorch {torch.__version__} on {device}")\n',
+    'print("✓ All packages installed — ready to go")',
+]))
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Cell 2 — Load model (shared across all sections)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+cells.append(md([
+    "---\n",
+    "\n",
+    "## Loading our model\n",
+    "\n",
+    "We'll use **Qwen3-0.6B** throughout this notebook — a 0.6-billion-parameter\n",
+    "language model that fits comfortably on a T4 GPU (~1.2 GB VRAM in float16).\n",
+    "It's small enough to inspect internals yet capable enough to show real\n",
+    "language understanding.",
+]))
+
+cells.append(code([
+    'MODEL_ID = "Qwen/Qwen3-0.6B"\n',
+    "\n",
+    "tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, cache_dir=CACHE_DIR)\n",
+    "model = AutoModelForCausalLM.from_pretrained(\n",
+    "    MODEL_ID,\n",
+    "    torch_dtype=torch.float16,\n",
+    "    device_map=\"auto\",\n",
+    "    cache_dir=CACHE_DIR,\n",
+    ")\n",
+    "model.eval()\n",
+    "\n",
+    "# Report VRAM usage\n",
+    'if device == "cuda":\n',
+    "    allocated = torch.cuda.memory_allocated() / 1e9\n",
+    '    print(f"✓ Model loaded — {allocated:.2f} GB VRAM used")\n',
+    "else:\n",
+    '    print("✓ Model loaded on CPU")\n',
+    "\n",
+    "print(f\"Vocabulary size : {model.config.vocab_size:,}\")\n",
+    "print(f\"Hidden size     : {model.config.hidden_size}\")\n",
+    "print(f\"Layers          : {model.config.num_hidden_layers}\")\n",
+    "print(f\"Attention heads : {model.config.num_attention_heads}\")",
+]))
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# SECTION 1 — What is a language model?
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+cells.append(md([
+    "---\n",
+    "\n",
+    "## 1 — What is a language model?\n",
+    "\n",
+    "Strip away the hype and a language model is a **function**:\n",
+    "\n",
+    "```\n",
+    "f(sequence of tokens) → probability distribution over next token\n",
+    "```\n",
+    "\n",
+    "That's it. The model takes every token it has seen so far and outputs a\n",
+    "score (called a **logit**) for *every* token in its vocabulary. A vocabulary\n",
+    "of 151,936 tokens means the model outputs 151,936 numbers — one per\n",
+    "possible next token.\n",
+    "\n",
+    "We convert those raw logits into probabilities with the **softmax** function:\n",
+    "\n",
+    "$$P(\\text{token}_i) = \\frac{e^{z_i}}{\\sum_j e^{z_j}}$$\n",
+    "\n",
+    "where $z_i$ is the logit for token $i$. Higher logit → higher probability.\n",
+    "\n",
+    "Let's make this concrete.",
+]))
+
+cells.append(code([
+    "# Feed a prompt and inspect raw logits\n",
+    'prompt = "The capital of France is"\n',
+    "inputs = tokenizer(prompt, return_tensors=\"pt\").to(model.device)\n",
+    "\n",
+    "with torch.no_grad():\n",
+    "    outputs = model(**inputs)\n",
+    "\n",
+    "# Logits for the LAST position — the model's prediction for the next token\n",
+    "logits = outputs.logits[0, -1, :]  # shape: (vocab_size,)\n",
+    "print(f\"Logit tensor shape: {logits.shape}\")\n",
+    "print(f\"Min logit: {logits.min().item():.2f}  |  Max logit: {logits.max().item():.2f}\")\n",
+    "print(f\"These are raw, unnormalized scores — not probabilities yet.\")",
+]))
+
+cells.append(md([
+    "### The probability distribution over vocabulary\n",
+    "\n",
+    "We apply softmax to convert logits into probabilities. Then we can see which\n",
+    "tokens the model thinks are most likely to come next. For *\"The capital of\n",
+    "France is\"*, the model should overwhelmingly predict *\" Paris\"* — because it\n",
+    "has compressed world knowledge into its weights during training.",
+]))
+
+cells.append(code([
+    "# Convert logits to probabilities and show the top-20 predicted tokens\n",
+    "probs = F.softmax(logits.float(), dim=-1)\n",
+    "\n",
+    "top_k_values, top_k_indices = torch.topk(probs, k=20)\n",
+    "\n",
+    "tokens = [tokenizer.decode(idx.item()) for idx in top_k_indices]\n",
+    "probabilities = top_k_values.cpu().numpy()\n",
+    "\n",
+    "# Print as a table\n",
+    'print(f"Top-20 predictions for: \\"{prompt} ___\\"\\n")\n',
+    'print(f"{\"Rank\":<6}{\"Token\":<20}{\"Probability\":>12}")\n',
+    'print("─" * 38)\n',
+    "for i, (tok, p) in enumerate(zip(tokens, probabilities), 1):\n",
+    "    print(f\"{i:<6}{repr(tok):<20}{p:>11.4%}\")",
+]))
+
+cells.append(code([
+    "# Visualize as a bar chart\n",
+    "fig, ax = plt.subplots(figsize=(10, 5))\n",
+    "bars = ax.barh(range(len(tokens)-1, -1, -1), probabilities[::-1], color=\"#4C72B0\")\n",
+    "ax.set_yticks(range(len(tokens)-1, -1, -1))\n",
+    "ax.set_yticklabels([repr(t) for t in tokens], fontsize=10)\n",
+    "ax.set_xlabel(\"Probability\")\n",
+    'ax.set_title(f\'Next-token probabilities for: "{prompt} ___"\')\n',
+    "ax.spines[\"top\"].set_visible(False)\n",
+    "ax.spines[\"right\"].set_visible(False)\n",
+    "plt.tight_layout()\n",
+    "plt.show()\n",
+    "\n",
+    "print(f\"\\nThe model assigns {probabilities[0]:.1%} probability to the top token.\")\n",
+    "print(f\"The remaining {1 - probabilities[0]:.1%} is spread across {model.config.vocab_size:,} other tokens.\")",
+]))
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# SECTION 2 — The generation pipeline, step by step
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+cells.append(md([
+    "---\n",
+    "\n",
+    "## 2 — The generation pipeline, step by step\n",
+    "\n",
+    "When you call `model.generate()` (or hit \"Send\" in ChatGPT), six steps\n",
+    "happen in sequence. Understanding each step is the single most useful\n",
+    "mental model for AI engineering.\n",
+    "\n",
+    "```\n",
+    "text → [Tokenize] → token IDs → [Embed] → vectors\n",
+    "  → [Transform] → contextualized vectors → [Predict] → logits\n",
+    "  → [Sample] → next token ID → [Decode] → text\n",
+    "```\n",
+    "\n",
+    "Let's walk through each step with real values.",
+]))
+
+# --- Step 1: Tokenization ---
+cells.append(md([
+    "### Step 1: Tokenization — text → token IDs\n",
+    "\n",
+    "The tokenizer splits raw text into **sub-word tokens** and maps each to an\n",
+    "integer ID. This is the vocabulary the model actually works with — not\n",
+    "characters, not whole words, but something in between.\n",
+    "\n",
+    "We'll cover tokenization in depth in\n",
+    "[01_tokenization_deep_dive.ipynb](01_tokenization_deep_dive.ipynb). For now,\n",
+    "just see the mapping:",
+]))
+
+cells.append(code([
+    "# Step 1: Tokenization\n",
+    'prompt = "Large language models predict the next token"\n',
+    "\n",
+    "token_ids = tokenizer.encode(prompt)\n",
+    "tokens_list = tokenizer.convert_ids_to_tokens(token_ids)\n",
+    "\n",
+    'print(f"Text:       {repr(prompt)}")\n',
+    'print(f"Token IDs:  {token_ids}")\n',
+    'print(f"Tokens:     {tokens_list}")\n',
+    'print(f"Num tokens: {len(token_ids)}")\n',
+    "\n",
+    "# Show the mapping token-by-token\n",
+    'print(f"\\n{\"Token\":<20}{\"ID\":>8}")\n',
+    'print("─" * 28)\n',
+    "for tok, tid in zip(tokens_list, token_ids):\n",
+    "    print(f\"{repr(tok):<20}{tid:>8}\")",
+]))
+
+# --- Step 2: Embedding ---
+cells.append(md([
+    "### Step 2: Embedding — token IDs → vectors\n",
+    "\n",
+    "Each token ID is an index into an **embedding table** — a giant matrix of\n",
+    "shape `(vocab_size, hidden_size)`. Looking up a token ID retrieves a dense\n",
+    "vector that represents that token's \"meaning\" in a high-dimensional space.\n",
+    "\n",
+    "At this stage, each vector knows only about its own token — no context yet.\n",
+    "That's what the transformer layers are for.",
+]))
+
+cells.append(code([
+    "# Step 2: Embedding lookup\n",
+    "input_ids = tokenizer(prompt, return_tensors=\"pt\").input_ids.to(model.device)\n",
+    "\n",
+    "# Access the embedding layer directly\n",
+    "embedding_layer = model.get_input_embeddings()\n",
+    "embeddings = embedding_layer(input_ids)\n",
+    "\n",
+    'print(f"Input IDs shape : {input_ids.shape}        # (batch, seq_len)")\n',
+    'print(f"Embeddings shape: {embeddings.shape}  # (batch, seq_len, hidden_size)")\n',
+    'print(f"\\nEach of the {input_ids.shape[1]} tokens is now a {embeddings.shape[2]}-dimensional vector.")\n',
+    "\n",
+    "# Peek at the first token's embedding (first 10 dimensions)\n",
+    "first_vec = embeddings[0, 0, :10].detach().cpu().float().numpy()\n",
+    'print(f"\\nFirst 10 dims of token \\"{tokens_list[0]}\\\":  {np.round(first_vec, 4)}")',
+]))
+
+# --- Step 3: Transformer layers ---
+cells.append(md([
+    "### Step 3: Transformer layers — the black box that contextualizes\n",
+    "\n",
+    "The embeddings pass through the model's transformer layers (Qwen3-0.6B has\n",
+    "28 layers). Each layer applies **self-attention** and a **feed-forward\n",
+    "network**, progressively enriching each vector with context from every\n",
+    "other token in the sequence.\n",
+    "\n",
+    "Before the transformer: the vector for *\"bank\"* is the same whether the\n",
+    "sentence is about rivers or money.\n",
+    "\n",
+    "After the transformer: the vector for *\"bank\"* carries the context of the\n",
+    "entire sentence. This is the magic step — we'll open the black box in\n",
+    "[05_attention_and_context.ipynb](05_attention_and_context.ipynb).\n",
+    "\n",
+    "For now, let's run the full forward pass and see that the output changes:",
+]))
+
+cells.append(code([
+    "# Step 3: Run through all transformer layers\n",
+    "with torch.no_grad():\n",
+    "    outputs = model(input_ids, output_hidden_states=True)\n",
+    "\n",
+    "# Compare embedding (layer 0) vs final hidden state (last layer)\n",
+    "initial = outputs.hidden_states[0][0, 0, :10].cpu().float().numpy()\n",
+    "final = outputs.hidden_states[-1][0, 0, :10].cpu().float().numpy()\n",
+    "\n",
+    'print(f"Layers in model: {len(outputs.hidden_states) - 1}")  # -1 for embedding layer\n',
+    'print(f"\\nFirst token \\"{tokens_list[0]}\\\":")\n',
+    'print(f"  Before transformer (first 10 dims): {np.round(initial, 4)}")\n',
+    'print(f"  After transformer  (first 10 dims): {np.round(final, 4)}")\n',
+    "\n",
+    "# How much did the representation change?\n",
+    "cos_sim = F.cosine_similarity(\n",
+    "    outputs.hidden_states[0][0, 0].unsqueeze(0).float(),\n",
+    "    outputs.hidden_states[-1][0, 0].unsqueeze(0).float()\n",
+    ").item()\n",
+    'print(f"\\n  Cosine similarity (before vs after): {cos_sim:.4f}")\n',
+    'print(f"  The vector was substantially transformed by the 28 layers.")',
+]))
+
+# --- Step 4: Prediction ---
+cells.append(md([
+    "### Step 4: Prediction — final hidden state → logits → probabilities\n",
+    "\n",
+    "After the transformer layers, a **language model head** (a single linear\n",
+    "layer) projects each hidden state back to vocabulary size, producing one\n",
+    "logit per token in the vocabulary. We care about the logits at the *last*\n",
+    "position — those predict what comes next.",
+]))
+
+cells.append(code([
+    "# Step 4: Logits → probabilities\n",
+    "logits = outputs.logits[0, -1, :]  # (vocab_size,)\n",
+    'print(f"Logits shape: {logits.shape}  — one score per vocabulary token")\n',
+    "\n",
+    "probs = F.softmax(logits.float(), dim=-1)\n",
+    'print(f"Probabilities sum: {probs.sum().item():.6f}  — they form a valid distribution")\n',
+    "\n",
+    "# Top 5 next-token predictions\n",
+    "top5_probs, top5_ids = torch.topk(probs, 5)\n",
+    'print(f"\\nTop-5 next tokens for: \\"{prompt} ___\\\"")\n',
+    "for p, idx in zip(top5_probs, top5_ids):\n",
+    "    print(f\"  {repr(tokenizer.decode(idx.item())):<15} {p.item():.4%}\")",
+]))
+
+# --- Step 5: Sampling ---
+cells.append(md([
+    "### Step 5: Sampling — pick the next token\n",
+    "\n",
+    "Now we have a probability distribution. How do we pick a token?\n",
+    "\n",
+    "- **Greedy decoding**: always pick the highest-probability token. Deterministic\n",
+    "  but repetitive.\n",
+    "- **Random sampling**: draw from the distribution. Creative but sometimes\n",
+    "  incoherent.\n",
+    "\n",
+    "In practice, we use **temperature**, **top-k**, and **top-p** to control the\n",
+    "tradeoff. We'll explore these in Section 5.",
+]))
+
+cells.append(code([
+    "# Step 5: Greedy vs random sampling\n",
+    "greedy_token_id = torch.argmax(probs).item()\n",
+    'print(f"Greedy pick:  {repr(tokenizer.decode(greedy_token_id))}  (highest prob)")\n',
+    "\n",
+    "# Random sampling — draw 5 times\n",
+    "sampled_ids = torch.multinomial(probs, num_samples=5, replacement=True)\n",
+    "sampled_tokens = [tokenizer.decode(sid.item()) for sid in sampled_ids]\n",
+    'print(f"Random draws: {[repr(t) for t in sampled_tokens]}")',
+]))
+
+# --- Step 6: Decode ---
+cells.append(md([
+    "### Step 6: Decode — token ID → text\n",
+    "\n",
+    "Finally, we convert the chosen token ID back to text. Then we append it to\n",
+    "the input and repeat the entire pipeline to generate the *next* token. This\n",
+    "is called **autoregressive generation** — the model's output becomes its\n",
+    "own input, one token at a time.",
+]))
+
+cells.append(code([
+    "# Step 6: Decode and show the full autoregressive loop\n",
+    'print("=== Full generation loop (10 tokens, greedy) ===\\n")\n',
+    "generated_ids = input_ids.clone()\n",
+    "\n",
+    "for step in range(10):\n",
+    "    with torch.no_grad():\n",
+    "        out = model(generated_ids)\n",
+    "    next_logits = out.logits[0, -1, :]\n",
+    "    next_id = torch.argmax(next_logits).unsqueeze(0).unsqueeze(0)\n",
+    "    generated_ids = torch.cat([generated_ids, next_id], dim=-1)\n",
+    "\n",
+    "    decoded = tokenizer.decode(next_id[0], skip_special_tokens=True)\n",
+    "    print(f\"  Step {step+1:>2}: picked {repr(decoded):<12} → \"\n",
+    "          f\"\\\"{tokenizer.decode(generated_ids[0], skip_special_tokens=True)}\\\"\")\n",
+    "\n",
+    'print(f"\\nFinal output: \\\"{tokenizer.decode(generated_ids[0], skip_special_tokens=True)}\\\"\")',
+]))
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# SECTION 3 — Why next-token prediction produces intelligence
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+cells.append(md([
+    "---\n",
+    "\n",
+    "## 3 — Why next-token prediction produces intelligence\n",
+    "\n",
+    "It seems absurd: a model trained *only* to predict the next word becomes\n",
+    "capable of reasoning, translation, coding, and creative writing. How?\n",
+    "\n",
+    "### The compression hypothesis\n",
+    "\n",
+    "To predict well, the model must **compress** the training data into its\n",
+    "weights. That compression forces it to learn the *rules* behind the data\n",
+    "rather than memorize the data itself:\n",
+    "\n",
+    "- To predict the next word in a news article about France, it must encode\n",
+    "  the fact that Paris is the capital.\n",
+    "- To predict the next token in Python code, it must learn syntax rules,\n",
+    "  variable scoping, and common design patterns.\n",
+    "- To predict the next word in a dialogue, it must model social norms,\n",
+    "  speaker intent, and conversational structure.\n",
+    "\n",
+    "**Next-token prediction is a proxy objective.** The model doesn't \"try to\n",
+    "learn world knowledge\" — it tries to minimize prediction error, and world\n",
+    "knowledge is what it needs to do that.",
+]))
+
+cells.append(code([
+    "# The model encodes world knowledge as a side effect of prediction\n",
+    "knowledge_probes = [\n",
+    '    "The chemical formula for water is",\n',
+    '    "def fibonacci(n):\\n    if n <=",\n',
+    '    "The theory of relativity was proposed by Albert",\n',
+    '    "To convert Celsius to Fahrenheit, multiply by 9/5 and add",\n',
+    '    "In chess, the opening move e4 is called the",\n',
+    "]\n",
+    "\n",
+    "print(\"What the model 'knows' from predicting the next token:\\n\")\n",
+    "for probe in knowledge_probes:\n",
+    "    ids = tokenizer(probe, return_tensors=\"pt\").input_ids.to(model.device)\n",
+    "    with torch.no_grad():\n",
+    "        out = model(ids)\n",
+    "    top_id = torch.argmax(out.logits[0, -1, :]).item()\n",
+    "    predicted = tokenizer.decode(top_id)\n",
+    "    print(f'  \"{probe}\" → {repr(predicted)}')",
+]))
+
+cells.append(md([
+    "### The scaling insight\n",
+    "\n",
+    "Small models learn surface patterns — common phrases, simple grammar. As\n",
+    "models scale (more parameters, more data, more compute), they learn\n",
+    "progressively deeper structure:\n",
+    "\n",
+    "| Scale | What the model learns |\n",
+    "|-------|----------------------|\n",
+    "| ~100M params | Common phrases, basic grammar |\n",
+    "| ~1B params | World facts, simple reasoning |\n",
+    "| ~10B params | Multi-step reasoning, code generation |\n",
+    "| ~100B+ params | Instruction following, nuanced analysis |\n",
+    "\n",
+    "Our 0.6B model sits in the 1B-ish tier — good enough to demonstrate facts\n",
+    "and basic patterns, but you'll see it stumble on harder reasoning tasks.\n",
+    "That's expected and instructive.",
+]))
+
+cells.append(code([
+    "# Show limits: the small model struggles with harder reasoning\n",
+    "hard_probes = [\n",
+    '    "If I have 3 apples and give away 1, I have",\n',
+    "    \"The word 'happy' is the opposite of\",\n",
+    "]\n",
+    "\n",
+    'print("Easy vs harder predictions with a 0.6B model:\\n")\n',
+    "for probe in hard_probes:\n",
+    "    ids = tokenizer(probe, return_tensors=\"pt\").input_ids.to(model.device)\n",
+    "    with torch.no_grad():\n",
+    "        out = model(ids)\n",
+    "    # Show top-3 predictions\n",
+    "    top3_probs, top3_ids = torch.topk(\n",
+    "        F.softmax(out.logits[0, -1, :].float(), dim=-1), 3\n",
+    "    )\n",
+    "    preds = [(tokenizer.decode(i.item()), p.item()) for i, p in zip(top3_ids, top3_probs)]\n",
+    '    print(f\'  "{probe}___"\')\n',
+    "    for tok, p in preds:\n",
+    "        print(f\"    {repr(tok):<12} ({p:.2%})\")\n",
+    "    print()",
+]))
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# SECTION 4 — The transformer: a black box tour
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+cells.append(md([
+    "---\n",
+    "\n",
+    "## 4 — The transformer: a black box tour\n",
+    "\n",
+    "We won't build a transformer from scratch here — that's\n",
+    "[05_attention_and_context.ipynb](05_attention_and_context.ipynb). Instead,\n",
+    "let's build the practitioner's mental model.\n",
+    "\n",
+    "### The core idea: attention\n",
+    "\n",
+    "Each transformer layer has a **self-attention** mechanism that lets every\n",
+    "token \"look at\" every other token and decide how much to incorporate their\n",
+    "information. Think of it as:\n",
+    "\n",
+    "> *\"For each word I'm processing, which other words in the sentence should\n",
+    "> I pay attention to?\"*\n",
+    "\n",
+    "For the sentence *\"The cat sat on the mat because it was tired\"*:\n",
+    "- When processing *\"it\"*, attention learns to focus on *\"cat\"* (the referent)\n",
+    "- When processing *\"tired\"*, attention focuses on *\"cat\"* and *\"it\"*\n",
+    "\n",
+    "### Why this matters for practitioners\n",
+    "\n",
+    "Attention is why **context matters so much** in prompts. Every token you\n",
+    "include influences every other token's representation. This is why:\n",
+    "- Prompt engineering works (different prefixes → different attention patterns)\n",
+    "- RAG works (injected context shifts attention toward relevant facts)\n",
+    "- Context windows have limits (attention is O(n²) in sequence length)",
+]))
+
+cells.append(code([
+    "# Extract attention patterns from the model\n",
+    'sentence = "The cat sat on the mat because it was tired"\n',
+    "inputs = tokenizer(sentence, return_tensors=\"pt\").to(model.device)\n",
+    "tokens_for_display = tokenizer.convert_ids_to_tokens(inputs.input_ids[0])\n",
+    "\n",
+    "with torch.no_grad():\n",
+    "    attn_output = model(**inputs, output_attentions=True)\n",
+    "\n",
+    "# Attention shape: (batch, num_heads, seq_len, seq_len)\n",
+    "# Pick the last layer, average across attention heads\n",
+    "last_layer_attn = attn_output.attentions[-1][0]  # (num_heads, seq, seq)\n",
+    "avg_attn = last_layer_attn.mean(dim=0).cpu().float().numpy()  # (seq, seq)\n",
+    "\n",
+    'print(f"Sentence: \\"{sentence}\\\"")\n',
+    'print(f"Tokens:   {tokens_for_display}")\n',
+    'print(f"Attention matrix shape: {avg_attn.shape} (seq_len × seq_len)")',
+]))
+
+cells.append(md([
+    "### Visualizing attention\n",
+    "\n",
+    "The heatmap below shows which tokens \"attend to\" which other tokens\n",
+    "(averaged across all attention heads in the last layer). Brighter cells mean\n",
+    "stronger attention. Look for the pronoun *\"it\"* — it should attend strongly\n",
+    "to *\"cat\"*, demonstrating coreference resolution.",
+]))
+
+cells.append(code([
+    "# Attention heatmap\n",
+    "fig, ax = plt.subplots(figsize=(8, 6))\n",
+    "im = ax.imshow(avg_attn, cmap=\"Blues\", aspect=\"auto\")\n",
+    "ax.set_xticks(range(len(tokens_for_display)))\n",
+    "ax.set_yticks(range(len(tokens_for_display)))\n",
+    "ax.set_xticklabels(tokens_for_display, rotation=45, ha=\"right\", fontsize=9)\n",
+    "ax.set_yticklabels(tokens_for_display, fontsize=9)\n",
+    'ax.set_xlabel("Attended to (keys)")\n',
+    'ax.set_ylabel("Attending from (queries)")\n',
+    'ax.set_title("Attention patterns — last layer, averaged across heads")\n',
+    "plt.colorbar(im, ax=ax, shrink=0.8)\n",
+    "plt.tight_layout()\n",
+    "plt.show()",
+]))
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# SECTION 5 — Generation parameters: your control panel
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+cells.append(md([
+    "---\n",
+    "\n",
+    "## 5 — Generation parameters: your control panel\n",
+    "\n",
+    "When you generate text, you have three main knobs that shape the output.\n",
+    "Understanding them mechanically (not just as vibes) is a core AI engineering\n",
+    "skill.",
+]))
+
+# --- Temperature ---
+cells.append(md([
+    "### Temperature\n",
+    "\n",
+    "Temperature rescales the logits *before* softmax:\n",
+    "\n",
+    "$$P(\\text{token}_i) = \\frac{e^{z_i / T}}{\\sum_j e^{z_j / T}}$$\n",
+    "\n",
+    "- **T < 1.0**: sharpens the distribution → model becomes more confident\n",
+    "  and repetitive\n",
+    "- **T = 1.0**: uses the model's raw probabilities\n",
+    "- **T > 1.0**: flattens the distribution → model becomes more random\n",
+    "  and creative\n",
+    "\n",
+    "Let's see this visually:",
+]))
+
+cells.append(code([
+    "# Temperature visualization\n",
+    'demo_prompt = "Once upon a time, there was a"\n',
+    "ids = tokenizer(demo_prompt, return_tensors=\"pt\").input_ids.to(model.device)\n",
+    "with torch.no_grad():\n",
+    "    raw_logits = model(ids).logits[0, -1, :].float()\n",
+    "\n",
+    "temperatures = [0.1, 0.5, 1.0, 1.5, 2.0]\n",
+    "fig, axes = plt.subplots(1, len(temperatures), figsize=(18, 4), sharey=True)\n",
+    "\n",
+    "for ax, temp in zip(axes, temperatures):\n",
+    "    scaled_probs = F.softmax(raw_logits / temp, dim=-1)\n",
+    "    top_p, top_i = torch.topk(scaled_probs, 10)\n",
+    "    top_tokens = [tokenizer.decode(i.item()) for i in top_i]\n",
+    "    top_p = top_p.cpu().numpy()\n",
+    "\n",
+    "    ax.barh(range(9, -1, -1), top_p[::-1], color=\"#4C72B0\")\n",
+    "    ax.set_yticks(range(9, -1, -1))\n",
+    "    ax.set_yticklabels([repr(t) for t in top_tokens], fontsize=8)\n",
+    "    ax.set_title(f\"T = {temp}\", fontsize=12, fontweight=\"bold\")\n",
+    "    ax.set_xlim(0, 1)\n",
+    "    ax.spines[\"top\"].set_visible(False)\n",
+    "    ax.spines[\"right\"].set_visible(False)\n",
+    "\n",
+    "axes[0].set_ylabel(\"Token\")\n",
+    "fig.suptitle(f'Top-10 token probabilities at different temperatures — \"{demo_prompt}...\"',\n",
+    "             fontsize=13, y=1.02)\n",
+    "plt.tight_layout()\n",
+    "plt.show()",
+]))
+
+# --- Top-k ---
+cells.append(md([
+    "### Top-k sampling\n",
+    "\n",
+    "Top-k restricts the sampling pool to the **k most likely tokens**, then\n",
+    "renormalizes the probabilities among those k. This prevents the model from\n",
+    "ever selecting wildly improbable tokens.\n",
+    "\n",
+    "- **k = 1**: equivalent to greedy decoding\n",
+    "- **k = 50**: a common default, allows moderate diversity\n",
+    "- **k = vocab_size**: no filtering at all",
+]))
+
+cells.append(code([
+    "# Top-k demonstration\n",
+    "probs_raw = F.softmax(raw_logits, dim=-1)\n",
+    "\n",
+    "def apply_top_k(probs: torch.Tensor, k: int) -> torch.Tensor:\n",
+    "    \"\"\"Zero out all but the top-k tokens, then renormalize.\"\"\"\n",
+    "    top_vals, top_idx = torch.topk(probs, k)\n",
+    "    filtered = torch.zeros_like(probs)\n",
+    "    filtered.scatter_(0, top_idx, top_vals)\n",
+    "    return filtered / filtered.sum()\n",
+    "\n",
+    "for k in [1, 5, 50, 1000]:\n",
+    "    filtered = apply_top_k(probs_raw, k)\n",
+    "    nonzero = (filtered > 0).sum().item()\n",
+    "    top_token = tokenizer.decode(torch.argmax(filtered).item())\n",
+    "    entropy = -(filtered[filtered > 0] * filtered[filtered > 0].log()).sum().item()\n",
+    "    print(f\"  top-k={k:<5}  tokens in pool: {nonzero:<6}  \"\n",
+    "          f\"entropy: {entropy:.3f} nats  top: {repr(top_token)}\")",
+]))
+
+# --- Top-p ---
+cells.append(md([
+    "### Top-p (nucleus) sampling\n",
+    "\n",
+    "Top-p sorts tokens by probability and includes tokens until the cumulative\n",
+    "probability reaches **p**. Unlike top-k, the number of tokens varies\n",
+    "dynamically — confident predictions use fewer tokens, uncertain predictions\n",
+    "use more.\n",
+    "\n",
+    "- **p = 0.1**: very focused (only the most probable tokens)\n",
+    "- **p = 0.9**: a common default, good balance\n",
+    "- **p = 1.0**: no filtering",
+]))
+
+cells.append(code([
+    "# Top-p demonstration\n",
+    "def apply_top_p(probs: torch.Tensor, p: float) -> torch.Tensor:\n",
+    "    \"\"\"Keep tokens until cumulative probability reaches p, then renormalize.\"\"\"\n",
+    "    sorted_probs, sorted_idx = torch.sort(probs, descending=True)\n",
+    "    cumulative = torch.cumsum(sorted_probs, dim=-1)\n",
+    "    # Create mask: keep tokens where cumulative prob hasn't exceeded p yet\n",
+    "    mask = cumulative - sorted_probs < p\n",
+    "    filtered = torch.zeros_like(probs)\n",
+    "    filtered.scatter_(0, sorted_idx[mask], sorted_probs[mask])\n",
+    "    return filtered / filtered.sum()\n",
+    "\n",
+    'print(f"Top-p filtering for: \\\"{demo_prompt}...\\\"\\n\")\n',
+    "for p_val in [0.1, 0.5, 0.9, 0.95, 1.0]:\n",
+    "    filtered = apply_top_p(probs_raw, p_val)\n",
+    "    nonzero = (filtered > 0).sum().item()\n",
+    "    entropy = -(filtered[filtered > 0] * filtered[filtered > 0].log()).sum().item()\n",
+    "    print(f\"  top-p={p_val:<5}  tokens in pool: {nonzero:<6}  entropy: {entropy:.3f} nats\")",
+]))
+
+# --- Compare generations ---
+cells.append(code([
+    "# Generate from the same prompt with different settings\n",
+    "def generate_text(prompt: str, max_new: int = 40, **kwargs) -> str:\n",
+    "    \"\"\"Generate text with specified decoding parameters.\"\"\"\n",
+    "    ids = tokenizer(prompt, return_tensors=\"pt\").input_ids.to(model.device)\n",
+    "    with torch.no_grad():\n",
+    "        out = model.generate(\n",
+    "            ids, max_new_tokens=max_new,\n",
+    "            pad_token_id=tokenizer.eos_token_id,\n",
+    "            **kwargs\n",
+    "        )\n",
+    "    return tokenizer.decode(out[0][ids.shape[1]:], skip_special_tokens=True)\n",
+    "\n",
+    'story_prompt = "The scientist opened the mysterious box and found"\n',
+    "\n",
+    "settings = [\n",
+    '    ("Greedy (T=0)",       dict(do_sample=False)),\n',
+    '    ("Low temp (T=0.3)",   dict(do_sample=True, temperature=0.3, top_p=0.95)),\n',
+    '    ("Medium (T=0.7)",     dict(do_sample=True, temperature=0.7, top_p=0.9)),\n',
+    '    ("High temp (T=1.5)",  dict(do_sample=True, temperature=1.5, top_p=0.95)),\n',
+    '    ("Top-k=5",            dict(do_sample=True, temperature=0.7, top_k=5)),\n',
+    "]\n",
+    "\n",
+    'print(f"Prompt: \\\"{story_prompt}\\\"\\n")\n',
+    'print("=" * 70)\n',
+    "for name, params in settings:\n",
+    "    result = generate_text(story_prompt, **params)\n",
+    '    print(f"\\n{name}:")\n',
+    "    print(f\"  {result}\")\n",
+    '    print("-" * 70)',
+]))
+
+cells.append(md([
+    "### Recommended settings for common use cases\n",
+    "\n",
+    "| Use case | Temperature | Top-p | Top-k | Notes |\n",
+    "|----------|:-----------:|:-----:|:-----:|-------|\n",
+    "| **Factual Q&A** | 0.0–0.3 | 0.9 | — | Low randomness, stay on topic |\n",
+    "| **Code generation** | 0.0–0.2 | 0.95 | — | Precision matters |\n",
+    "| **Conversational chat** | 0.7 | 0.9 | — | Balance of coherence and variety |\n",
+    "| **Creative writing** | 0.8–1.2 | 0.95 | — | Higher diversity |\n",
+    "| **Brainstorming** | 1.0–1.5 | 0.95 | 50 | Maximum diversity |\n",
+    "\n",
+    "> **Practitioner tip**: start with `temperature=0.7, top_p=0.9` and adjust\n",
+    "> from there. Most production systems use these as defaults.",
+]))
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# SECTION 6 — Mental models for the rest of this course
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+cells.append(md([
+    "---\n",
+    "\n",
+    "## 6 — Mental models for the rest of this course\n",
+    "\n",
+    "Everything in AI engineering becomes more intuitive once you see the LLM\n",
+    "as a next-token probability machine. Here's how each major topic connects\n",
+    "back to what we learned today:\n",
+    "\n",
+    "### Prompt engineering\n",
+    "You're crafting the **prefix** that steers the probability distribution.\n",
+    "Different prompts produce different attention patterns, which produce\n",
+    "different probability distributions over the next token. Prompt engineering\n",
+    "is the art of finding the prefix that puts the highest probability on the\n",
+    "outputs you want.\n",
+    "\n",
+    "### Retrieval-augmented generation (RAG)\n",
+    "You're **injecting context** into the prompt so the model doesn't have to\n",
+    "\"remember\" facts from its training weights. By placing relevant documents\n",
+    "in the context window, you shift attention toward those facts, making\n",
+    "correct completions more probable.\n",
+    "\n",
+    "### Finetuning\n",
+    "You're **adjusting the weights** that determine the probability distribution.\n",
+    "Instead of relying on the right prefix, you modify the model itself so it\n",
+    "naturally assigns higher probability to your desired outputs.\n",
+    "\n",
+    "### Agents\n",
+    "You're letting the model's **output become input** in a loop. The model\n",
+    "generates an action (e.g., a function call), you execute it, feed the result\n",
+    "back, and the model generates the next action. Autoregressive generation\n",
+    "meets the real world.\n",
+    "\n",
+    "### Evals\n",
+    "You're measuring whether the distribution assigns **high probability to\n",
+    "correct answers**. Whether you're checking exact match, BLEU, or\n",
+    "log-likelihood, you're fundamentally asking: did the model's distribution\n",
+    "peak in the right place?\n",
+    "\n",
+    "### Systems\n",
+    "You're making this pipeline — tokenize, embed, transform, predict, sample,\n",
+    "decode — run **fast and cheap at scale**. KV caches, batching, quantization,\n",
+    "speculative decoding — all optimize different steps of the pipeline we traced\n",
+    "today.",
+]))
+
+cells.append(code([
+    "# A visual summary of the pipeline and where each topic fits\n",
+    "pipeline_summary = \"\"\"\n",
+    "┌─────────────────────────────────────────────────────────────────┐\n",
+    "│                   THE LLM GENERATION PIPELINE                  │\n",
+    "├─────────────────────────────────────────────────────────────────┤\n",
+    "│                                                                 │\n",
+    "│  \"The capital of France is\"                                     │\n",
+    "│         │                                                       │\n",
+    "│         ▼                                                       │\n",
+    "│  ┌─────────────┐                                                │\n",
+    "│  │  Tokenize    │ ← Notebook 01                                 │\n",
+    "│  └──────┬──────┘                                                │\n",
+    "│         ▼                                                       │\n",
+    "│  ┌─────────────┐                                                │\n",
+    "│  │  Embed       │ ← Notebook 02                                 │\n",
+    "│  └──────┬──────┘                                                │\n",
+    "│         ▼                                                       │\n",
+    "│  ┌─────────────┐  ← Finetuning adjusts these weights           │\n",
+    "│  │  Transform   │  ← RAG injects context here                   │\n",
+    "│  │  (28 layers) │  ← Prompt engineering steers attention         │\n",
+    "│  └──────┬──────┘  ← Notebook 05                                │\n",
+    "│         ▼                                                       │\n",
+    "│  ┌─────────────┐                                                │\n",
+    "│  │  Predict     │  ← Evals measure this distribution            │\n",
+    "│  └──────┬──────┘                                                │\n",
+    "│         ▼                                                       │\n",
+    "│  ┌─────────────┐                                                │\n",
+    "│  │  Sample      │  ← Notebook 03 (temp, top-k, top-p)           │\n",
+    "│  └──────┬──────┘                                                │\n",
+    "│         ▼                                                       │\n",
+    "│  ┌─────────────┐                                                │\n",
+    "│  │  Decode      │  ← Systems optimize this whole pipeline       │\n",
+    "│  └──────┬──────┘                                                │\n",
+    "│         ▼                                                       │\n",
+    "│  \" Paris\"                                                       │\n",
+    "│         │                                                       │\n",
+    "│         └──→ Append to input, repeat (autoregressive loop)      │\n",
+    "│              ← Agents loop this with tool use                   │\n",
+    "│                                                                 │\n",
+    "└─────────────────────────────────────────────────────────────────┘\n",
+    "\"\"\"\n",
+    "print(pipeline_summary)",
+]))
+
+cells.append(md([
+    "### The one sentence to remember\n",
+    "\n",
+    "> **An LLM is a function that takes a sequence of tokens and returns a\n",
+    "> probability distribution over the next token. Everything else in AI\n",
+    "> engineering is about shaping the input, shaping the weights, or\n",
+    "> interpreting the output of that function.**\n",
+    "\n",
+    "Keep this mental model as you work through the rest of the course. When\n",
+    "something seems magical, trace it back to the pipeline above.",
+]))
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Exercises
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+cells.append(md([
+    "---\n",
+    "\n",
+    "## Exercises\n",
+    "\n",
+    "1. **Probe the distribution**: Feed 5 different prompts (a factual question,\n",
+    "   a code snippet, a story opening, a math problem, and a foreign language\n",
+    "   sentence) and examine the top-10 predicted tokens for each. What patterns\n",
+    "   do you notice about the shape of the distribution? When is the model\n",
+    "   confident vs uncertain?\n",
+    "\n",
+    "2. **Temperature sweep**: Generate 10 completions each at temperature 0.1,\n",
+    "   0.7, and 1.5 from the same prompt. Count how many *unique* completions\n",
+    "   you get at each setting. Plot the relationship between temperature and\n",
+    "   diversity.\n",
+    "\n",
+    "3. **Greedy vs sampling**: Find a prompt where greedy decoding\n",
+    "   (temperature=0) gives a clearly *worse* output than sampling\n",
+    "   (temperature=0.7). Hint: try prompts that benefit from variety, such as\n",
+    "   brainstorming or creative writing. Why does greedy fail here?",
+]))
+
+cells.append(code([
+    "# ── Exercise starter code ──────────────────────────────────────────────\n",
+    "\n",
+    "# Exercise 1: Probe the distribution\n",
+    "exercise_prompts = [\n",
+    '    "The largest planet in our solar system is",      # factual\n',
+    '    "def sort_list(arr):\\n    return sorted(",        # code\n',
+    '    "In a world where dragons were real,",            # story\n',
+    '    "2 + 2 * 3 =",                                   # math\n',
+    '    "Bonjour, comment",                               # French\n',
+    "]\n",
+    "\n",
+    "# TODO: For each prompt, get the top-10 predictions and compare distributions\n",
+    "# Hint: reuse the pattern from Section 1\n",
+    "\n",
+    "# Exercise 2: Temperature sweep\n",
+    '# sweep_prompt = "The future of artificial intelligence will"\n',
+    "# TODO: Generate 10 completions at each temperature, count unique ones\n",
+    "\n",
+    "# Exercise 3: Greedy vs sampling\n",
+    "# TODO: Find a prompt where greedy decoding produces repetitive/boring output\n",
+    "#       but sampling at T=0.7 produces better text",
+]))
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Key Takeaways
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+cells.append(md([
+    "---\n",
+    "\n",
+    "## Key Takeaways\n",
+    "\n",
+    "| # | Takeaway |\n",
+    "|---|----------|\n",
+    "| 1 | An LLM is a function: sequence of tokens → probability distribution over the next token |\n",
+    "| 2 | Generation is a six-step pipeline: tokenize → embed → transform → predict → sample → decode |\n",
+    "| 3 | Next-token prediction forces the model to compress world knowledge into its weights |\n",
+    "| 4 | Attention lets each token incorporate context from every other token in the sequence |\n",
+    "| 5 | Temperature reshapes the probability distribution; top-k and top-p limit the sampling pool |\n",
+    "| 6 | Every AI engineering topic (prompting, RAG, finetuning, agents, evals, systems) maps to a step in this pipeline |",
+]))
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# What's Next
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+cells.append(md([
+    "## What's Next\n",
+    "\n",
+    "- **Next**: [01_tokenization_deep_dive.ipynb](01_tokenization_deep_dive.ipynb)\n",
+    "  — How text becomes tokens, BPE from scratch, and why tokenization shapes\n",
+    "  everything downstream\n",
+    "- **Related**: [03_sampling_and_decoding.ipynb](03_sampling_and_decoding.ipynb)\n",
+    "  — A deep dive into the sampling strategies we previewed in Section 5",
+]))
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# References
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+cells.append(md([
+    "## References & Further Reading\n",
+    "\n",
+    "1. [Vaswani et al., \"Attention Is All You Need,\" 2017]"
+    "(https://arxiv.org/abs/1706.03762) — The original transformer paper\n",
+    "2. [Jay Alammar, \"The Illustrated Transformer,\" 2018]"
+    "(https://jalammar.github.io/illustrated-transformer/) — "
+    "The best visual explanation of transformers\n",
+    "3. [Andrej Karpathy, \"Let's build GPT from scratch,\" 2023]"
+    "(https://www.youtube.com/watch?v=kCc8FmEb1nY) — "
+    "Hands-on coding walkthrough of a transformer\n",
+    "4. [Holtzman et al., \"The Curious Case of Neural Text Degeneration,\" 2020]"
+    "(https://arxiv.org/abs/1904.09751) — "
+    "The paper that introduced nucleus (top-p) sampling",
+]))
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Assemble notebook
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+notebook = {
+    "nbformat": 4,
+    "nbformat_minor": 0,
+    "metadata": {
+        "colab": {
+            "provenance": [],
+            "gpuType": "T4",
+        },
+        "kernelspec": {
+            "name": "python3",
+            "display_name": "Python 3",
+        },
+        "language_info": {
+            "name": "python",
+        },
+        "accelerator": "GPU",
+    },
+    "cells": cells,
+}
+
+out_path = pathlib.Path(__file__).parent / "00_how_llms_work.ipynb"
+out_path.write_text(json.dumps(notebook, indent=1, ensure_ascii=False), encoding="utf-8")
+print(f"✓ Wrote {len(cells)} cells to {out_path}")
+print(f"  Markdown cells: {sum(1 for c in cells if c['cell_type'] == 'markdown')}")
+print(f"  Code cells:     {sum(1 for c in cells if c['cell_type'] == 'code')}")
