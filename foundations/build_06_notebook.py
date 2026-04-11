@@ -1,0 +1,800 @@
+"""Generate 06_scaling_laws_and_model_selection.ipynb for the Castalia foundations track."""
+import json, pathlib
+
+def md(lines):
+    return {"cell_type": "markdown", "metadata": {}, "source": lines}
+
+def code(lines):
+    return {"cell_type": "code", "execution_count": None, "metadata": {}, "outputs": [], "source": lines}
+
+cells = []
+
+# ── Cell 0: Title ──────────────────────────────────────────────────────────
+cells.append(md([
+    "# 06 — Scaling Laws and Model Selection: Choosing the Right Model for the Job\n",
+    "\n",
+    "> **Orbit -1 (Foundations)** · **Difficulty**: Intermediate · **Reading time**: ~25 min\n",
+    "\n",
+    "[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/cyruslayo/castalia/blob/main/foundations/06_scaling_laws_and_model_selection.ipynb)\n",
+    "\n",
+    "**Prerequisites**: [00_how_llms_work.ipynb](00_how_llms_work.ipynb), [05_attention_and_context.ipynb](05_attention_and_context.ipynb)\n",
+    "\n",
+    "**What you will learn**:\n",
+    "- Scaling laws: how performance relates to parameters, data, and compute\n",
+    "- Chinchilla vs Llama training philosophies\n",
+    "- VRAM budgeting: will your model fit?\n",
+    "- Quantization: 4-bit, 8-bit, 16-bit tradeoffs\n",
+    "- A decision framework for model selection"
+]))
+
+# ── Cell 1: Setup ──────────────────────────────────────────────────────────
+cells.append(code([
+    "# @title Setup — Run this cell first\n",
+    "!pip install -q numpy matplotlib pandas\n",
+    "\n",
+    "import numpy as np\n",
+    "import matplotlib.pyplot as plt\n",
+    "import pandas as pd\n",
+    "\n",
+    "plt.rcParams.update({\n",
+    "    'figure.dpi': 120,\n",
+    "    'axes.spines.top': False,\n",
+    "    'axes.spines.right': False,\n",
+    "    'font.size': 11,\n",
+    "})\n",
+    "\n",
+    "print('✓ All packages ready')"
+]))
+
+# ── Section 1: The Scaling Hypothesis ──────────────────────────────────────
+cells.append(md([
+    "---\n",
+    "## 1 — The Scaling Hypothesis\n",
+    "\n",
+    "In 2020, Kaplan et al. at OpenAI published a landmark finding: **language model loss\n",
+    "follows a power law** with respect to three variables — parameters (*N*), dataset\n",
+    "size (*D*), and compute budget (*C*). The relationship is remarkably clean:\n",
+    "\n",
+    "$$L(N) = \\left(\\frac{N_c}{N}\\right)^{\\alpha_N}, \\quad L(D) = \\left(\\frac{D_c}{D}\\right)^{\\alpha_D}, \\quad L(C) = \\left(\\frac{C_c}{C}\\right)^{\\alpha_C}$$\n",
+    "\n",
+    "where $\\alpha_N \\approx 0.076$, $\\alpha_D \\approx 0.095$, and $\\alpha_C \\approx 0.050$.\n",
+    "\n",
+    "This means **performance improves predictably** as you scale up. A 10× increase in\n",
+    "parameters gives a consistent reduction in loss. No phase transitions, no plateaus —\n",
+    "just smooth power-law curves across many orders of magnitude.\n",
+    "\n",
+    "**Key insight**: Parameters matter more than data *per FLOP*, but both matter. The\n",
+    "original Kaplan scaling laws suggested making models as large as possible and training\n",
+    "them on relatively less data. This advice turned out to be **wrong** — as we'll see\n",
+    "in the next section."
+]))
+
+cells.append(code([
+    "# Visualize Kaplan-style scaling curves\n",
+    "fig, axes = plt.subplots(1, 3, figsize=(14, 4))\n",
+    "\n",
+    "# Loss vs Parameters\n",
+    "N = np.logspace(6, 11, 200)  # 1M to 100B params\n",
+    "alpha_N, Nc = 0.076, 8.8e13\n",
+    "L_N = (Nc / N) ** alpha_N\n",
+    "axes[0].loglog(N, L_N, 'b-', linewidth=2)\n",
+    "axes[0].set_xlabel('Parameters (N)')\n",
+    "axes[0].set_ylabel('Test Loss')\n",
+    "axes[0].set_title('Loss vs Parameters')\n",
+    "\n",
+    "# Known model data points (approximate)\n",
+    "model_params = [125e6, 350e6, 1.3e9, 6.7e9, 13e9, 65e9]\n",
+    "model_names  = ['125M', '350M', '1.3B', '6.7B', '13B', '65B']\n",
+    "model_losses = [(Nc / n) ** alpha_N for n in model_params]\n",
+    "axes[0].scatter(model_params, model_losses, c='red', zorder=5, s=40)\n",
+    "for n, name, loss in zip(model_params, model_names, model_losses):\n",
+    "    axes[0].annotate(name, (n, loss), textcoords='offset points',\n",
+    "                     xytext=(5, 5), fontsize=8)\n",
+    "\n",
+    "# Loss vs Dataset size\n",
+    "D = np.logspace(8, 13, 200)  # 100M to 10T tokens\n",
+    "alpha_D, Dc = 0.095, 5.4e13\n",
+    "L_D = (Dc / D) ** alpha_D\n",
+    "axes[1].loglog(D, L_D, 'g-', linewidth=2)\n",
+    "axes[1].set_xlabel('Dataset Size (tokens)')\n",
+    "axes[1].set_ylabel('Test Loss')\n",
+    "axes[1].set_title('Loss vs Data')\n",
+    "\n",
+    "# Loss vs Compute\n",
+    "C = np.logspace(15, 25, 200)  # FLOPs\n",
+    "alpha_C, Cc = 0.050, 3.1e8\n",
+    "L_C = (Cc / C) ** alpha_C\n",
+    "axes[2].loglog(C, L_C, 'r-', linewidth=2)\n",
+    "axes[2].set_xlabel('Compute (FLOPs)')\n",
+    "axes[2].set_ylabel('Test Loss')\n",
+    "axes[2].set_title('Loss vs Compute')\n",
+    "\n",
+    "plt.tight_layout()\n",
+    "plt.suptitle('Kaplan Scaling Laws (2020)', y=1.03, fontsize=13, fontweight='bold')\n",
+    "plt.show()\n",
+    "print('Note: Straight lines on log-log plots = power law relationships')"
+]))
+
+# ── Section 2: Chinchilla vs Llama ─────────────────────────────────────────
+cells.append(md([
+    "---\n",
+    "## 2 — Chinchilla vs Llama: Two Training Philosophies\n",
+    "\n",
+    "### The Chinchilla correction\n",
+    "\n",
+    "In 2022, Hoffmann et al. (DeepMind) showed that Kaplan's original scaling laws had\n",
+    "a critical flaw: they **under-trained** large models. The compute-optimal recipe — the\n",
+    "\"Chinchilla rule\" — says:\n",
+    "\n",
+    "> **Tokens ≈ 20 × Parameters**\n",
+    "\n",
+    "A 10B parameter model should see ~200B tokens. GPT-3 (175B params) was trained on\n",
+    "only 300B tokens — roughly **8.5× under-trained** by this rule.\n",
+    "\n",
+    "### The Llama counter-argument\n",
+    "\n",
+    "Meta's LLaMA team made a deliberate choice to **over-train** smaller models. Why?\n",
+    "Because Chinchilla optimizes for **training compute**, but in production you pay for\n",
+    "**inference compute** on every single request. A smaller model trained longer is\n",
+    "cheaper to *serve* even if it cost more to *train*.\n",
+    "\n",
+    "This shift from \"compute-optimal training\" to \"inference-optimal training\" reshaped\n",
+    "the industry. Today, most open models follow the Llama philosophy: train small\n",
+    "models on far more tokens than Chinchilla would recommend."
+]))
+
+cells.append(code([
+    "# Chinchilla vs Llama training comparison\n",
+    "data = {\n",
+    "    'Model': ['GPT-3', 'Chinchilla', 'LLaMA-1 7B', 'LLaMA-1 13B',\n",
+    "              'LLaMA-1 65B', 'LLaMA-2 7B', 'LLaMA-2 70B',\n",
+    "              'LLaMA-3 8B', 'LLaMA-3 70B'],\n",
+    "    'Params (B)':    [175,   70,  7,   13,  65,  7,   70,  8,   70],\n",
+    "    'Tokens (T)':    [0.3, 1.4, 1.0,  1.0, 1.4, 2.0,  2.0, 15.0, 15.0],\n",
+    "    'Chinchilla (T)': [3.5, 1.4, 0.14, 0.26, 1.3, 0.14, 1.4, 0.16, 1.4],\n",
+    "    'Token/Param Ratio': [1.7, 20, 143, 77, 22, 286, 29, 1875, 214],\n",
+    "    'Philosophy': ['Under-trained', 'Compute-optimal', 'Inference-optimal',\n",
+    "                   'Inference-optimal', 'Near-optimal', 'Inference-optimal',\n",
+    "                   'Inference-optimal', 'Inference-optimal', 'Inference-optimal'],\n",
+    "}\n",
+    "df = pd.DataFrame(data)\n",
+    "print('Training Philosophy Comparison')\n",
+    "print('=' * 80)\n",
+    "print(df.to_string(index=False))\n",
+    "print()\n",
+    "print('Chinchilla rule: Tokens ≈ 20 × Params')\n",
+    "print('LLaMA-3 8B trains on 1,875× its parameter count — nearly 100× the Chinchilla ratio!')"
+]))
+
+cells.append(md([
+    "### Why does this matter to you?\n",
+    "\n",
+    "When comparing models of the same size, **check how many tokens they were trained on**.\n",
+    "A 7B model trained on 2T tokens will typically outperform one trained on 300B tokens.\n",
+    "The LLaMA-3 models represent the extreme of this philosophy — 8B parameters trained\n",
+    "on 15T tokens, which explains their surprising competitiveness with much larger models."
+]))
+
+# ── Section 3: VRAM Budgeting ──────────────────────────────────────────────
+cells.append(md([
+    "---\n",
+    "## 3 — VRAM Budgeting: Will Your Model Fit?\n",
+    "\n",
+    "Before choosing a model, you need to answer one practical question: **will it fit in\n",
+    "memory?** The fundamental equation is:\n",
+    "\n",
+    "$$\\text{VRAM} = \\underbrace{N \\times B_{\\text{precision}}}_{\\text{model weights}} + \\underbrace{\\text{KV cache}}_{\\text{grows with context}} + \\underbrace{\\text{overhead}}_{\\text{framework, activations}}$$\n",
+    "\n",
+    "Where:\n",
+    "- **N** = number of parameters\n",
+    "- **B** = bytes per parameter (2 for FP16, 1 for INT8, 0.5 for INT4)\n",
+    "- **KV cache** = 2 × layers × hidden_dim × context_len × batch_size × B_kv\n",
+    "- **Overhead** ≈ 10–20% of the total for CUDA kernels, framework buffers, etc.\n",
+    "\n",
+    "Let's build a calculator that estimates VRAM requirements for any model configuration."
+]))
+
+cells.append(code([
+    "def estimate_vram_gb(\n",
+    "    params_billion: float,\n",
+    "    precision_bits: int = 16,\n",
+    "    context_length: int = 4096,\n",
+    "    num_layers: int = None,\n",
+    "    hidden_dim: int = None,\n",
+    "    batch_size: int = 1,\n",
+    "    overhead_pct: float = 0.15,\n",
+    ") -> dict:\n",
+    "    \"\"\"Estimate total VRAM for inference.\"\"\"\n",
+    "    bytes_per_param = precision_bits / 8\n",
+    "    weight_gb = (params_billion * 1e9 * bytes_per_param) / (1024**3)\n",
+    "\n",
+    "    # Rough heuristics for architecture if not provided\n",
+    "    if num_layers is None:\n",
+    "        num_layers = int(params_billion * 4) if params_billion < 15 else int(params_billion * 1.2)\n",
+    "    if hidden_dim is None:\n",
+    "        hidden_dim = int((params_billion * 1e9 / (12 * num_layers)) ** 0.5) * 2\n",
+    "\n",
+    "    kv_bytes_per_token = 2 * num_layers * hidden_dim * 2 * (precision_bits / 8)\n",
+    "    kv_cache_gb = (kv_bytes_per_token * context_length * batch_size) / (1024**3)\n",
+    "\n",
+    "    subtotal = weight_gb + kv_cache_gb\n",
+    "    overhead_gb = subtotal * overhead_pct\n",
+    "    total = subtotal + overhead_gb\n",
+    "\n",
+    "    return {\n",
+    "        'weights_gb': round(weight_gb, 2),\n",
+    "        'kv_cache_gb': round(kv_cache_gb, 2),\n",
+    "        'overhead_gb': round(overhead_gb, 2),\n",
+    "        'total_gb': round(total, 2),\n",
+    "    }\n",
+    "\n",
+    "# Quick test\n",
+    "result = estimate_vram_gb(7, precision_bits=16)\n",
+    "print(f'LLaMA-2 7B @ FP16: {result}')"
+]))
+
+cells.append(code([
+    "# VRAM requirement table: model sizes × precisions × GPU fit\n",
+    "models = [\n",
+    "    ('Phi-3 Mini',   3.8),\n",
+    "    ('LLaMA-3 8B',   8.0),\n",
+    "    ('Mistral 7B',   7.0),\n",
+    "    ('LLaMA-2 13B', 13.0),\n",
+    "    ('Mixtral 8x7B', 46.7),\n",
+    "    ('LLaMA-2 70B', 70.0),\n",
+    "]\n",
+    "precisions = [16, 8, 4]\n",
+    "gpus = {\n",
+    "    'T4 (16 GB)': 16,\n",
+    "    'L4 (24 GB)': 24,\n",
+    "    'A100 (40 GB)': 40,\n",
+    "    'A100 (80 GB)': 80,\n",
+    "}\n",
+    "\n",
+    "rows = []\n",
+    "for name, params in models:\n",
+    "    for bits in precisions:\n",
+    "        est = estimate_vram_gb(params, precision_bits=bits)\n",
+    "        fits = {gpu: '✓' if est['total_gb'] <= vram else '✗'\n",
+    "                for gpu, vram in gpus.items()}\n",
+    "        rows.append({\n",
+    "            'Model': name,\n",
+    "            'Precision': f'{bits}-bit',\n",
+    "            'VRAM (GB)': est['total_gb'],\n",
+    "            **fits,\n",
+    "        })\n",
+    "\n",
+    "df_vram = pd.DataFrame(rows)\n",
+    "print('VRAM Requirements — Inference (batch_size=1, ctx=4096)')\n",
+    "print('=' * 85)\n",
+    "print(df_vram.to_string(index=False))"
+]))
+
+cells.append(md([
+    "### Reading the table\n",
+    "\n",
+    "Key takeaways:\n",
+    "- **FP16**: You need roughly **2 GB per billion parameters** just for weights\n",
+    "- **INT8**: Cuts memory in half — a 13B model fits on a T4\n",
+    "- **INT4**: Cuts it again — a 70B model *squeezes* into an 80 GB A100\n",
+    "- **KV cache** grows with context length and is often the hidden memory killer\n",
+    "\n",
+    "For **Colab Free (T4 with 16 GB)**, your practical ceiling is:\n",
+    "- 7–8B models at INT4/INT8 quantization\n",
+    "- 3–4B models at FP16\n",
+    "\n",
+    "This is why quantization isn't optional for most practitioners — it's the only way\n",
+    "to run capable models on accessible hardware."
+]))
+
+# ── Section 4: Quantization Overview ───────────────────────────────────────
+cells.append(md([
+    "---\n",
+    "## 4 — Quantization Overview\n",
+    "\n",
+    "Quantization reduces the precision of model weights to shrink memory usage and\n",
+    "increase inference speed. Here's the landscape:\n",
+    "\n",
+    "| Format | Bits | Bytes/Param | Typical Quality Loss | Use Case |\n",
+    "|--------|------|------------|---------------------|----------|\n",
+    "| FP32   | 32   | 4.0        | None (baseline)     | Training only |\n",
+    "| FP16 / BF16 | 16 | 2.0   | Negligible          | Default inference |\n",
+    "| INT8   | 8    | 1.0        | ~0.5% on benchmarks | Good balance |\n",
+    "| NF4 (QLoRA) | 4 | 0.5    | ~1–2% on benchmarks | Memory-constrained |\n",
+    "| GPTQ/AWQ 4-bit | 4 | 0.5 | ~1–3% on benchmarks | Production serving |\n",
+    "| GGUF Q4_K_M | ~4.8 | 0.6 | ~1% on benchmarks   | CPU + GPU offload |\n",
+    "\n",
+    "### The NF4 insight (QLoRA)\n",
+    "\n",
+    "Normal Float 4-bit (NF4) is a data type designed specifically for normally-distributed\n",
+    "neural network weights. It provides **information-theoretically optimal** 4-bit\n",
+    "quantization for Gaussian-distributed values. Combined with double quantization\n",
+    "(quantizing the quantization constants), QLoRA achieves near-lossless 4-bit inference."
+]))
+
+cells.append(code([
+    "# Visualize quantization quality-memory tradeoff\n",
+    "quant_data = {\n",
+    "    'Format': ['FP32', 'FP16/BF16', 'INT8', 'NF4/GPTQ-4', 'Q2_K (2-bit)'],\n",
+    "    'Bits':   [32, 16, 8, 4, 2],\n",
+    "    'Relative_Quality': [100, 99.8, 99.3, 98.2, 93.0],\n",
+    "    'Memory_Factor': [1.0, 0.5, 0.25, 0.125, 0.0625],\n",
+    "}\n",
+    "df_q = pd.DataFrame(quant_data)\n",
+    "\n",
+    "fig, ax1 = plt.subplots(figsize=(9, 5))\n",
+    "x = range(len(df_q))\n",
+    "bars = ax1.bar(x, df_q['Relative_Quality'], color=['#2196F3', '#4CAF50',\n",
+    "               '#FF9800', '#F44336', '#9C27B0'], alpha=0.8, width=0.5)\n",
+    "ax1.set_ylim(90, 101)\n",
+    "ax1.set_ylabel('Relative Quality (%)', fontsize=12)\n",
+    "ax1.set_xticks(x)\n",
+    "ax1.set_xticklabels(df_q['Format'], fontsize=10)\n",
+    "\n",
+    "ax2 = ax1.twinx()\n",
+    "ax2.plot(x, df_q['Memory_Factor'], 'ko--', markersize=8, linewidth=2)\n",
+    "ax2.set_ylabel('Relative Memory (1.0 = FP32)', fontsize=12)\n",
+    "ax2.set_ylim(0, 1.15)\n",
+    "\n",
+    "for i, (q, m) in enumerate(zip(df_q['Relative_Quality'], df_q['Memory_Factor'])):\n",
+    "    ax1.text(i, q + 0.3, f'{q}%', ha='center', fontsize=9, fontweight='bold')\n",
+    "\n",
+    "plt.title('Quantization: Quality vs Memory Tradeoff', fontsize=13, fontweight='bold')\n",
+    "fig.tight_layout()\n",
+    "plt.show()\n",
+    "print('Black line = memory usage. Bars = quality retention.')\n",
+    "print('Sweet spot: 4-bit quantization retains ~98% quality at 1/8 the memory.')"
+]))
+
+cells.append(md([
+    "### GGUF format labels explained\n",
+    "\n",
+    "When downloading models from HuggingFace, you'll see GGUF filenames like\n",
+    "`llama-3-8b-instruct-Q4_K_M.gguf`. Here's how to decode them:\n",
+    "\n",
+    "| Label | Meaning | Quality | Size |\n",
+    "|-------|---------|---------|------|\n",
+    "| Q2_K  | 2-bit, K-quant | Low — noticeable degradation | Smallest |\n",
+    "| Q3_K_S/M/L | 3-bit, small/medium/large | Usable for simple tasks | Very small |\n",
+    "| Q4_K_S | 4-bit, K-quant small | Good — slight quality loss | Small |\n",
+    "| **Q4_K_M** | **4-bit, K-quant medium** | **Best balance** — recommended | **~4.8 bpw** |\n",
+    "| Q5_K_M | 5-bit, K-quant medium | Very good | Medium |\n",
+    "| Q6_K  | 6-bit, K-quant | Near-lossless | Larger |\n",
+    "| Q8_0  | 8-bit | Essentially lossless | Large |\n",
+    "\n",
+    "**Rule of thumb**: Start with **Q4_K_M**. Move to Q5_K_M or Q6_K if quality matters\n",
+    "more than speed. Only use Q2/Q3 if you're truly memory-starved."
+]))
+
+# ── Section 5: Reading Benchmarks ──────────────────────────────────────────
+cells.append(md([
+    "---\n",
+    "## 5 — Reading Benchmarks (Without Being Fooled)\n",
+    "\n",
+    "Public benchmarks are how the community compares models. The three you'll see\n",
+    "most often:\n",
+    "\n",
+    "| Benchmark | Measures | Format | Typical Range |\n",
+    "|-----------|----------|--------|---------------|\n",
+    "| **MMLU** | Broad knowledge (57 subjects) | 4-choice MCQ | 25% (random) → 90%+ |\n",
+    "| **HumanEval** | Code generation (Python) | Function completion | 0% → 90%+ |\n",
+    "| **GSM8K** | Grade-school math reasoning | Word problems | 0% → 95%+ |\n",
+    "\n",
+    "### What they don't tell you\n",
+    "\n",
+    "1. **Benchmark contamination**: Models may have seen test questions during training.\n",
+    "   The LLaMA-3 technical report explicitly acknowledges decontamination challenges.\n",
+    "2. **Prompt sensitivity**: A model's MMLU score can swing 5–10 points depending on\n",
+    "   the exact prompt template, number of few-shot examples, and formatting.\n",
+    "3. **Saturation**: Top models cluster above 85% on MMLU, making differences\n",
+    "   statistically insignificant.\n",
+    "4. **Task mismatch**: MMLU measures multiple-choice ability. Your application likely\n",
+    "   requires open-ended generation, which is a very different skill.\n",
+    "\n",
+    "### The golden rule\n",
+    "\n",
+    "> **YOUR evaluation on YOUR task > any public benchmark.**\n",
+    "\n",
+    "Build a small eval set (50–100 examples) that represents your actual use case.\n",
+    "Run every candidate model through it. The model that wins on *your* data is the\n",
+    "right model, regardless of what the leaderboard says."
+]))
+
+cells.append(code([
+    "# Benchmark comparison for popular models\n",
+    "bench = {\n",
+    "    'Model': ['GPT-4o', 'Claude 3.5 Sonnet', 'LLaMA-3 70B',\n",
+    "              'LLaMA-3 8B', 'Mistral 7B', 'Phi-3 Mini (3.8B)',\n",
+    "              'Gemma-2 9B'],\n",
+    "    'Params':  ['~200B?', '~???', '70B', '8B', '7B', '3.8B', '9B'],\n",
+    "    'MMLU':    [88.7, 88.7, 82.0, 68.4, 62.5, 69.9, 71.3],\n",
+    "    'HumanEval': [90.2, 92.0, 81.7, 62.2, 40.2, 58.5, 54.3],\n",
+    "    'GSM8K':   [95.3, 96.4, 93.0, 79.6, 52.2, 82.7, 76.4],\n",
+    "}\n",
+    "df_bench = pd.DataFrame(bench)\n",
+    "print('Benchmark Scores (approximate, higher = better)')\n",
+    "print('=' * 72)\n",
+    "print(df_bench.to_string(index=False))\n",
+    "print()\n",
+    "print('⚠ These numbers change with prompt format, few-shot count, and evaluation harness.')\n",
+    "print('  Use them for rough comparisons only.')"
+]))
+
+# ── Section 6: Decision Framework ──────────────────────────────────────────
+cells.append(md([
+    "---\n",
+    "## 6 — Decision Framework: Picking the Right Model\n",
+    "\n",
+    "Rather than chasing leaderboard scores, walk through this decision tree:\n",
+    "\n",
+    "```\n",
+    "1. VRAM Budget\n",
+    "   └─ What GPU(s) do you have?\n",
+    "      └─ Max model size at INT4 = VRAM × 1.6 (billion params, rough)\n",
+    "\n",
+    "2. Latency Requirement\n",
+    "   └─ Real-time (<1s first token)? → Prefer smaller models or quantized\n",
+    "   └─ Batch processing? → Larger models OK, optimize throughput\n",
+    "\n",
+    "3. Task Complexity\n",
+    "   └─ Classification / extraction → 3–8B often sufficient\n",
+    "   └─ Multi-step reasoning → 13B+ or strong 8B (LLaMA-3)\n",
+    "   └─ Creative / open-ended → 70B+ or API models\n",
+    "\n",
+    "4. Data Sensitivity\n",
+    "   └─ Can data leave your network? → API models (GPT-4, Claude)\n",
+    "   └─ Must stay local? → Open models (LLaMA, Mistral)\n",
+    "\n",
+    "5. Finetune Plans\n",
+    "   └─ Will you finetune? → Pick model with good base + QLoRA support\n",
+    "   └─ Prompt-only? → Pick best instruct model in your VRAM budget\n",
+    "```\n",
+    "\n",
+    "Let's codify this into a function."
+]))
+
+cells.append(code([
+    "def recommend_model(\n",
+    "    vram_gb: float,\n",
+    "    latency_sensitive: bool = False,\n",
+    "    task_complexity: str = 'medium',     # 'low', 'medium', 'high'\n",
+    "    data_must_stay_local: bool = True,\n",
+    "    will_finetune: bool = False,\n",
+    ") -> str:\n",
+    "    \"\"\"Simple model selection heuristic.\"\"\"\n",
+    "    recommendations = []\n",
+    "\n",
+    "    if not data_must_stay_local:\n",
+    "        recommendations.append(\n",
+    "            '🌐 API option: GPT-4o or Claude 3.5 Sonnet — best quality, no GPU needed'\n",
+    "        )\n",
+    "\n",
+    "    # Determine max model size at INT4\n",
+    "    max_params_b = vram_gb * 1.6  # rough heuristic\n",
+    "\n",
+    "    if max_params_b >= 70:\n",
+    "        tier = '70B'\n",
+    "    elif max_params_b >= 13:\n",
+    "        tier = '13B'\n",
+    "    elif max_params_b >= 7:\n",
+    "        tier = '7-8B'\n",
+    "    elif max_params_b >= 3:\n",
+    "        tier = '3-4B'\n",
+    "    else:\n",
+    "        tier = 'tiny'\n",
+    "\n",
+    "    model_map = {\n",
+    "        '70B':  'LLaMA-3 70B (Q4) or Mixtral 8x7B (Q4)',\n",
+    "        '13B':  'LLaMA-2 13B (Q4/Q8) or Mistral 7B (FP16)',\n",
+    "        '7-8B': 'LLaMA-3 8B (Q4/Q8) or Mistral 7B (Q4)',\n",
+    "        '3-4B': 'Phi-3 Mini (Q4/FP16)',\n",
+    "        'tiny': 'Phi-3 Mini (Q2) — limited capability',\n",
+    "    }\n",
+    "\n",
+    "    recommendations.append(f'💻 Local option ({vram_gb} GB): {model_map[tier]}')\n",
+    "\n",
+    "    if will_finetune:\n",
+    "        ft_max = vram_gb * 0.6  # QLoRA needs extra memory\n",
+    "        if ft_max >= 13:\n",
+    "            recommendations.append('🔧 Finetune: LLaMA-3 8B with QLoRA (FP16 + 4-bit base)')\n",
+    "        elif ft_max >= 7:\n",
+    "            recommendations.append('🔧 Finetune: LLaMA-3 8B or Mistral 7B with QLoRA')\n",
+    "        else:\n",
+    "            recommendations.append('🔧 Finetune: Phi-3 Mini with QLoRA')\n",
+    "\n",
+    "    if latency_sensitive and tier in ('70B', '13B'):\n",
+    "        recommendations.append(\n",
+    "            '⚡ Latency note: Consider dropping to 7-8B tier for faster responses'\n",
+    "        )\n",
+    "\n",
+    "    return '\\n'.join(recommendations)\n",
+    "\n",
+    "# Example: Colab Free user with a classification task\n",
+    "print('═' * 60)\n",
+    "print('Scenario: Colab Free (T4 16GB), classification, local data')\n",
+    "print('═' * 60)\n",
+    "print(recommend_model(vram_gb=16, latency_sensitive=True,\n",
+    "                      task_complexity='low', data_must_stay_local=True))\n",
+    "print()\n",
+    "print('═' * 60)\n",
+    "print('Scenario: A100 80GB, complex reasoning, can use APIs')\n",
+    "print('═' * 60)\n",
+    "print(recommend_model(vram_gb=80, latency_sensitive=False,\n",
+    "                      task_complexity='high', data_must_stay_local=False,\n",
+    "                      will_finetune=True))"
+]))
+
+# ── Section 7: When Small Models Win ───────────────────────────────────────
+cells.append(md([
+    "---\n",
+    "## 7 — When Small Models Win\n",
+    "\n",
+    "Bigger isn't always better. There are three common scenarios where a smaller model\n",
+    "outperforms a larger one:\n",
+    "\n",
+    "### 1. Well-prompted 8B > Poorly-prompted 70B\n",
+    "\n",
+    "Prompt engineering has a larger effect on output quality than most people realize.\n",
+    "A carefully crafted system prompt with clear instructions, examples, and constraints\n",
+    "on an 8B model will beat a lazy one-liner on a 70B model for most structured tasks.\n",
+    "\n",
+    "### 2. RAG + Small > Large alone\n",
+    "\n",
+    "Retrieval-Augmented Generation (RAG) gives a small model access to relevant\n",
+    "knowledge at inference time. A 7B model with the right context retrieved from a\n",
+    "vector database can match or exceed a 70B model relying on parametric memory\n",
+    "alone — especially for domain-specific questions.\n",
+    "\n",
+    "### 3. Finetuned 3B > General 70B\n",
+    "\n",
+    "For narrow, well-defined tasks (classification, extraction, format conversion),\n",
+    "a finetuned small model dramatically outperforms a general large model. Microsoft's\n",
+    "Phi-3 demonstrated that a 3.8B model trained on high-quality curated data can\n",
+    "rival models 20× its size on reasoning benchmarks."
+]))
+
+cells.append(code([
+    "# Illustrate: when does model size stop helping?\n",
+    "model_sizes = [3.8, 7, 8, 13, 34, 70]\n",
+    "# Hypothetical accuracy curves for different approaches\n",
+    "general_prompt = [52, 60, 62, 68, 74, 82]\n",
+    "good_prompt    = [61, 72, 74, 78, 82, 86]\n",
+    "rag_pipeline   = [70, 80, 82, 84, 85, 87]\n",
+    "finetuned      = [85, 89, 90, 91, 91, 92]\n",
+    "\n",
+    "fig, ax = plt.subplots(figsize=(9, 5))\n",
+    "ax.plot(model_sizes, general_prompt, 'o--', label='Basic prompt', color='#ccc', linewidth=2)\n",
+    "ax.plot(model_sizes, good_prompt,    's-',  label='Engineered prompt', color='#2196F3', linewidth=2)\n",
+    "ax.plot(model_sizes, rag_pipeline,   '^-',  label='RAG + good prompt', color='#4CAF50', linewidth=2)\n",
+    "ax.plot(model_sizes, finetuned,      'D-',  label='Finetuned (QLoRA)', color='#F44336', linewidth=2)\n",
+    "\n",
+    "ax.axhline(y=82, color='gray', linestyle=':', alpha=0.5)\n",
+    "ax.annotate('70B basic prompt = 8B RAG', xy=(34, 82), fontsize=9,\n",
+    "            color='gray', style='italic')\n",
+    "\n",
+    "ax.set_xlabel('Model Size (Billion Parameters)', fontsize=12)\n",
+    "ax.set_ylabel('Task Accuracy (%)', fontsize=12)\n",
+    "ax.set_title('Bigger Isn\\'t Always Better', fontsize=13, fontweight='bold')\n",
+    "ax.legend(loc='lower right', fontsize=10)\n",
+    "ax.set_ylim(45, 95)\n",
+    "plt.tight_layout()\n",
+    "plt.show()\n",
+    "print('A finetuned 3.8B model outperforms a 70B model with a basic prompt.')\n",
+    "print('Invest in prompting/RAG/finetuning before scaling up model size.')"
+]))
+
+# ── Section 8: Colab Pro Cost Estimation ───────────────────────────────────
+cells.append(md([
+    "---\n",
+    "## 8 — Colab Pro Cost Estimation\n",
+    "\n",
+    "For this course, you'll primarily use Google Colab. Here's a practical breakdown of\n",
+    "what's available and what it costs:\n",
+    "\n",
+    "| Tier | GPU Options | VRAM | Approx. Cost | Max Model (INT4) |\n",
+    "|------|------------|------|-------------|------------------|\n",
+    "| Free | T4 | 16 GB | $0/mo | ~8B |\n",
+    "| Pro ($10/mo) | T4, L4 | 16–24 GB | ~$0.10/hr | ~13B |\n",
+    "| Pro+ ($50/mo) | T4, L4, A100 | 16–80 GB | ~$0.50/hr | ~70B |\n",
+    "| Enterprise | A100, H100 | 40–80 GB | Varies | 70B+ |\n",
+    "\n",
+    "**For this course**: Colab Free (T4) is sufficient for all notebooks. We design\n",
+    "every exercise to fit within 16 GB VRAM."
+]))
+
+cells.append(code([
+    "def estimate_colab_cost(\n",
+    "    hours_per_week: float,\n",
+    "    weeks: int,\n",
+    "    tier: str = 'free',  # 'free', 'pro', 'pro_plus'\n",
+    ") -> dict:\n",
+    "    \"\"\"Estimate Colab costs for the course.\"\"\"\n",
+    "    tier_info = {\n",
+    "        'free':     {'sub': 0,  'gpu_hr': 0.0,   'gpu': 'T4',  'vram': 16},\n",
+    "        'pro':      {'sub': 10, 'gpu_hr': 0.10,  'gpu': 'L4',  'vram': 24},\n",
+    "        'pro_plus': {'sub': 50, 'gpu_hr': 0.50,  'gpu': 'A100','vram': 80},\n",
+    "    }\n",
+    "    info = tier_info[tier]\n",
+    "    total_hours = hours_per_week * weeks\n",
+    "    compute_cost = total_hours * info['gpu_hr']\n",
+    "    subscription = info['sub'] * (weeks / 4.33)  # months\n",
+    "    total = compute_cost + subscription\n",
+    "\n",
+    "    return {\n",
+    "        'tier': tier,\n",
+    "        'gpu': info['gpu'],\n",
+    "        'vram_gb': info['vram'],\n",
+    "        'total_hours': total_hours,\n",
+    "        'compute_cost': f'${compute_cost:.2f}',\n",
+    "        'subscription': f'${subscription:.2f}',\n",
+    "        'total_cost': f'${total:.2f}',\n",
+    "    }\n",
+    "\n",
+    "# Course estimate: 4 hours/week for 12 weeks\n",
+    "print('Course Cost Projections (4 hrs/week × 12 weeks)')\n",
+    "print('=' * 55)\n",
+    "for tier in ['free', 'pro', 'pro_plus']:\n",
+    "    est = estimate_colab_cost(4, 12, tier)\n",
+    "    print(f\"{tier:10s} | GPU: {est['gpu']:5s} | VRAM: {est['vram_gb']:2d} GB | \"\n",
+    "          f\"Total: {est['total_cost']}\")\n",
+    "\n",
+    "print()\n",
+    "print('Recommendation: Start with Free tier. Upgrade to Pro only if you need')\n",
+    "print('longer sessions or want to experiment with 13B+ models.')"
+]))
+
+# ── Exercises ──────────────────────────────────────────────────────────────
+cells.append(md([
+    "---\n",
+    "## Exercises\n",
+    "\n",
+    "### Exercise 1: VRAM Budget for 3 Models\n",
+    "\n",
+    "Use the `estimate_vram_gb()` function to calculate VRAM requirements for:\n",
+    "1. **Mistral 7B** at FP16, INT8, and INT4\n",
+    "2. **LLaMA-3 70B** at INT4 with 8K context\n",
+    "3. **Phi-3 Mini (3.8B)** at FP16 with 128K context\n",
+    "\n",
+    "Which ones fit on a T4 (16 GB)? Which require an A100?"
+]))
+
+cells.append(code([
+    "# Exercise 1 — Your code here\n",
+    "# Hint: estimate_vram_gb(params_billion, precision_bits, context_length)\n",
+    "\n",
+    "# 1. Mistral 7B at three precisions\n",
+    "# for bits in [16, 8, 4]:\n",
+    "#     result = estimate_vram_gb(7, precision_bits=bits)\n",
+    "#     print(f'Mistral 7B @ {bits}-bit: {result[\"total_gb\"]} GB')\n",
+    "\n",
+    "# 2. LLaMA-3 70B at INT4 with 8K context\n",
+    "# result = estimate_vram_gb(70, precision_bits=4, context_length=8192)\n",
+    "\n",
+    "# 3. Phi-3 Mini at FP16 with 128K context\n",
+    "# result = estimate_vram_gb(3.8, precision_bits=16, context_length=131072)"
+]))
+
+cells.append(md([
+    "### Exercise 2: Model Selection for a Use Case\n",
+    "\n",
+    "You're building a customer support chatbot with these constraints:\n",
+    "- Must run on-premise (data sensitivity)\n",
+    "- Available hardware: 2× NVIDIA L4 (24 GB each)\n",
+    "- Latency: < 500ms first token\n",
+    "- Task: Answer questions using a knowledge base (RAG)\n",
+    "\n",
+    "Use the decision framework to recommend a model. Justify your choice."
+]))
+
+cells.append(code([
+    "# Exercise 2 — Your analysis here\n",
+    "# Use recommend_model() as a starting point, then refine your reasoning.\n",
+    "\n",
+    "# print(recommend_model(\n",
+    "#     vram_gb=24,\n",
+    "#     latency_sensitive=True,\n",
+    "#     task_complexity='medium',\n",
+    "#     data_must_stay_local=True,\n",
+    "#     will_finetune=False,\n",
+    "# ))\n",
+    "\n",
+    "# Your reasoning:\n",
+    "# - VRAM: ...\n",
+    "# - Latency: ...\n",
+    "# - RAG means: ...\n",
+    "# - Recommended model: ..."
+]))
+
+cells.append(md([
+    "### Exercise 3: Cost Projection\n",
+    "\n",
+    "You plan to spend 6 hours per week over 16 weeks developing a prototype. Compare\n",
+    "the cost of Colab Free, Pro, and Pro+ tiers. At what point does renting a dedicated\n",
+    "GPU server (e.g., Lambda Labs at ~$1.10/hr for an A100) become more cost-effective\n",
+    "than Colab Pro+?"
+]))
+
+cells.append(code([
+    "# Exercise 3 — Your calculations here\n",
+    "# for tier in ['free', 'pro', 'pro_plus']:\n",
+    "#     est = estimate_colab_cost(6, 16, tier)\n",
+    "#     print(f\"{tier}: {est['total_cost']}\")\n",
+    "\n",
+    "# Lambda Labs comparison:\n",
+    "# lambda_hourly = 1.10\n",
+    "# total_hours = 6 * 16\n",
+    "# lambda_cost = total_hours * lambda_hourly\n",
+    "# print(f'Lambda A100: ${lambda_cost:.2f}')"
+]))
+
+# ── Key Takeaways ──────────────────────────────────────────────────────────
+cells.append(md([
+    "---\n",
+    "## Key Takeaways\n",
+    "\n",
+    "1. **Scaling laws are predictable**: Loss follows power laws with parameters, data,\n",
+    "   and compute. More of each helps, but the returns are logarithmic.\n",
+    "\n",
+    "2. **Chinchilla vs Llama**: Compute-optimal training (20× tokens per param) gives\n",
+    "   the best model *per training dollar*. Inference-optimal training (100×+) gives\n",
+    "   the best model *per serving dollar*. The industry chose inference-optimal.\n",
+    "\n",
+    "3. **VRAM is your hard constraint**: At FP16, budget ~2 GB per billion parameters.\n",
+    "   Quantization (INT4/NF4) cuts this to ~0.5 GB per billion.\n",
+    "\n",
+    "4. **Quantization is nearly free quality-wise**: 4-bit quantization retains ~98%\n",
+    "   of model quality while using 1/4 the memory of FP16. Always consider it.\n",
+    "\n",
+    "5. **Benchmarks are noisy guides**: Use MMLU/HumanEval/GSM8K for rough comparisons.\n",
+    "   Build your own eval set for real decisions.\n",
+    "\n",
+    "6. **Smaller + smarter often wins**: Good prompts, RAG, or finetuning on a small\n",
+    "   model can beat a large general model. Invest in technique before scale."
+]))
+
+# ── References ─────────────────────────────────────────────────────────────
+cells.append(md([
+    "## References & Further Reading\n",
+    "\n",
+    "1. [Kaplan et al., \"Scaling Laws for Neural Language Models,\" 2020](https://arxiv.org/abs/2001.08361) — The original OpenAI scaling laws paper establishing power-law relationships between loss and compute/data/parameters.\n",
+    "2. [Hoffmann et al., \"Training Compute-Optimal Large Language Models\" (Chinchilla), 2022](https://arxiv.org/abs/2203.15556) — DeepMind's correction showing models should be trained on ~20× more tokens than Kaplan suggested.\n",
+    "3. [Touvron et al., \"LLaMA: Open and Efficient Foundation Language Models,\" 2023](https://arxiv.org/abs/2302.13971) — Meta's LLaMA-1 paper introducing inference-optimal training philosophy.\n",
+    "4. [Dettmers et al., \"QLoRA: Efficient Finetuning of Quantized Language Models,\" 2023](https://arxiv.org/abs/2305.14314) — The QLoRA paper introducing NF4 quantization and enabling 4-bit finetuning.\n",
+    "5. [Touvron et al., \"Llama 2: Open Foundation and Fine-Tuned Chat Models,\" 2023](https://arxiv.org/abs/2307.09288) — LLaMA-2 with RLHF and extended training.\n",
+    "6. [Meta AI, \"The Llama 3 Herd of Models,\" 2024](https://arxiv.org/abs/2407.21783) — LLaMA-3 with extreme over-training (15T tokens for 8B params).\n",
+    "7. [Hendrycks et al., \"Measuring Massive Multitask Language Understanding\" (MMLU), 2021](https://arxiv.org/abs/2009.03300) — The MMLU benchmark paper."
+]))
+
+# ── Assemble notebook ─────────────────────────────────────────────────────
+notebook = {
+    "nbformat": 4,
+    "nbformat_minor": 0,
+    "metadata": {
+        "colab": {"provenance": [], "gpuType": "T4"},
+        "kernelspec": {
+            "display_name": "Python 3",
+            "language": "python",
+            "name": "python3",
+        },
+        "language_info": {"name": "python", "version": "3.10.0"},
+        "accelerator": "GPU",
+    },
+    "cells": cells,
+}
+
+out_path = pathlib.Path(r"C:\AI2026\castalia\foundations\06_scaling_laws_and_model_selection.ipynb")
+out_path.write_text(json.dumps(notebook, indent=1, ensure_ascii=False), encoding="utf-8")
+
+# Stats
+n_md = sum(1 for c in cells if c["cell_type"] == "markdown")
+n_code = sum(1 for c in cells if c["cell_type"] == "code")
+
+# Word count for markdown cells
+word_count = 0
+for c in cells:
+    if c["cell_type"] == "markdown":
+        word_count += sum(len(line.split()) for line in c["source"])
+
+print(f"Wrote {out_path}")
+print(f"  {len(cells)} cells total: {n_md} markdown, {n_code} code")
+print(f"  ~{word_count} words of prose in markdown cells")
