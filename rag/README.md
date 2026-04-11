@@ -33,3 +33,8 @@
 | 27 | Advanced Architecture 🏗️ | RAPTOR | [raptor.ipynb](raptor.ipynb) |
 | 28 | Advanced Architecture 🏗️ | Self-RAG | [self_rag.ipynb](self_rag.ipynb) |
 | 29 | Advanced Architecture 🏗️ | Corrective RAG (CRAG) | [crag.ipynb](crag.ipynb) |
+| 30 | Iterative Techniques 🔁 | Iterative Retrieval | [iterative_retrieval.ipynb](iterative_retrieval.ipynb) |
+| 31 | Advanced Retrieval 🚀 | Ensemble Retrieval (RRF) | [ensemble_retrieval.ipynb](ensemble_retrieval.ipynb) |
+| 32 | Advanced Retrieval 🚀 | Multi-Faceted Filtering | [multi_faceted_filtering.ipynb](multi_faceted_filtering.ipynb) |
+| 33 | Evaluation 📊 | RAG Evaluation with DeepEval | [evaluation_deep_eval.ipynb](evaluation_deep_eval.ipynb) |
+| 34 | Evaluation 📊 | RAG Evaluation with LLM-as-Judge | [evaluation_grouse.ipynb](evaluation_grouse.ipynb) |
