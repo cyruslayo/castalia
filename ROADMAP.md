@@ -585,4 +585,31 @@ These themes thread through multiple orbits. Use this to find *all* notebooks re
 
 5. **Cross-cutting themes are your review tool** — when you reach Orbit 5 (finetuning for tool use), go back and review the tool design notebooks from Orbit 3. The theme maps make this easy.
 
-6. **Total estimated notebook count**: ~176 notebooks. This is a comprehensive curriculum — pace yourself and use the orbits as natural break points.
+6. **Total estimated notebook count**: ~190 notebooks across 8 domain folders, plus 48 applied lab notebooks (12 labs × 4 each). This is a comprehensive curriculum — pace yourself and use the orbits as natural break points.
+
+---
+
+## Applied Labs — Post-Orbit Product Track
+
+After completing Orbits 0–7, apply everything you've learned by building **12 product-grade prototypes** that map to proven product categories.
+
+Each lab follows a 4-notebook arc: **First Principles → Architecture → Build → Evaluate**.
+
+👉 **[labs/README.md](labs/README.md)** — Full index, domain matrix, progression guide, and ROI tiers.
+
+| # | Lab | Domains Used | Market |
+|---|-----|-------------|--------|
+| 01 | Customer Support Agent | PE, RAG, AG, EV | $12B+ |
+| 02 | Sales Intelligence | PE, RAG, AG, EV | $5B+ |
+| 03 | Contract Analyzer | PE, RAG, EV, FT | $28B+ |
+| 04 | Compliance Auditor | PE, RAG, AG, EV | $35B+ |
+| 05 | Document Processing | PE, MM, AG, EV | $12B+ |
+| 06 | AI Data Analyst | PE, AG, EV, SY | $30B+ |
+| 07 | Content & SEO Engine | PE, RAG, EV, FT | $400B+ |
+| 08 | Recruitment Matching | PE, RAG, EV, FT | $200B+ |
+| 09 | Feedback Intelligence | PE, RAG, AG, EV | $12B+ |
+| 10 | Code Review & Security | PE, RAG, AG, EV | $10B+ |
+| 11 | Proposal/RFP Automation | PE, RAG, AG, EV | $3B+ |
+| 12 | Enterprise Search & Q&A | PE, RAG, AG, EV | $8B+ |
+
+**Prerequisites**: Orbits 0–6 minimum. Each lab uses prompt engineering + RAG + evals as a baseline and adds domain-specific techniques.

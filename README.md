@@ -18,6 +18,27 @@ This repository is organized as a non-linear learning path across prompt enginee
 
 Read the complete orbit-based roadmap in [ROADMAP.md](ROADMAP.md).
 
+## Applied Labs — Build Real Products
+
+After completing the learning orbits, put everything together in **12 product-grade applied labs**. Each lab targets a proven product category ($50M–$1B+ ARR), starts from first principles, and builds a working prototype across 4 notebooks.
+
+👉 **[labs/README.md](labs/README.md)** — Full index, domain matrix, and progression guide.
+
+| # | Lab | Market |
+|---|-----|--------|
+| 01 | [Customer Support Agent](labs/01_customer_support_agent/) | Intercom / Ada — $12B+ |
+| 02 | [Sales Intelligence](labs/02_sales_intelligence/) | Gong / Apollo — $5B+ |
+| 03 | [Contract Analyzer](labs/03_contract_analyzer/) | Harvey AI — $28B+ |
+| 04 | [Compliance Auditor](labs/04_compliance_auditor/) | Vanta / Drata — $35B+ |
+| 05 | [Document Processing](labs/05_document_processing/) | Reducto / Textract — $12B+ |
+| 06 | [AI Data Analyst](labs/06_ai_data_analyst/) | ThoughtSpot — $30B+ |
+| 07 | [Content & SEO Engine](labs/07_content_seo_engine/) | Jasper / Writer — $400B+ |
+| 08 | [Recruitment Matching](labs/08_recruitment_matching/) | Eightfold — $200B+ |
+| 09 | [Feedback Intelligence](labs/09_feedback_intelligence/) | Medallia — $12B+ |
+| 10 | [Code Review & Security](labs/10_code_review_security/) | Snyk / SonarQube — $10B+ |
+| 11 | [Proposal/RFP Automation](labs/11_proposal_rfp_automation/) | RFPIO / Loopio — $3B+ |
+| 12 | [Enterprise Search & Q&A](labs/12_enterprise_search/) | Glean — $8B+ |
+
 ## Domain indexes
 
 | Folder | README |
@@ -29,6 +50,7 @@ Read the complete orbit-based roadmap in [ROADMAP.md](ROADMAP.md).
 | Finetuning | [finetuning/README.md](finetuning/README.md) |
 | Multimodal | [multimodal/README.md](multimodal/README.md) |
 | Systems | [systems/README.md](systems/README.md) |
+| Applied Labs | [labs/README.md](labs/README.md) |
 
 ## Why this layout
 
