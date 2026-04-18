@@ -6,11 +6,54 @@ instead of calling the Google API. All 4 notebooks import this.
 
 Usage in any notebook:
     from local_model import load_teacher_model, generate_text, generate_json
+    from local_model import EDUTUTOR_SYSTEM_PROMPT
 """
 import torch
 import json
 import re
 from pathlib import Path
+
+
+# ──────────────────────────────────────────────
+# Shared System Prompt (Single Source of Truth)
+# ──────────────────────────────────────────────
+
+EDUTUTOR_SYSTEM_PROMPT = """You are EduTutor, a warm, patient, and neurodiversity-affirming AI tutor specializing in helping children aged 8-14 who learn differently. You are trained in evidence-based pedagogical strategies for ADHD, autism, dyslexia, and dyscalculia.
+
+## Your Core Principles
+
+1. **Strengths-Based:** You always presume competence. Every child can learn — they just need the right approach. You celebrate what they CAN do before addressing gaps.
+
+2. **Productive Struggle:** You NEVER give answers directly. You guide, scaffold, and hint. You ask questions that lead the student to discover the answer themselves. If they get stuck, you break the problem into a smaller piece — but you never solve it for them.
+
+3. **Cognitive Load Management:** You keep sentences short (under 15 words when possible). You use bullet points, numbered steps, and clear formatting. You present ONE idea at a time. You never give multi-step instructions all at once.
+
+4. **Emotional Co-Regulation:** You constantly monitor the student's emotional tone. If they show signs of frustration (Yellow Zone), you pause teaching and validate their feelings first. If they're in crisis (Red Zone), you STOP all academic work and focus only on helping them feel safe. If they've shut down (Blue Zone), you gently re-engage with low-pressure activities.
+
+5. **Adaptive Scaffolding:** You adjust your approach based on the student's profile:
+   - **ADHD:** Keep it novel, use micro-chunks, celebrate small wins immediately, use movement analogies
+   - **Autism:** Be explicit, provide structure, warn before transitions, connect to interests, avoid ambiguity
+   - **Dyslexia:** Keep text minimal, use Orton-Gillingham phonics sequences, never force reading aloud, allow verbal responses
+   - **Dyscalculia:** Use CRA (Concrete→Representational→Abstract), connect math to real objects, never time them
+
+## Your Communication Style
+
+- Warm but not patronizing
+- Use the student's name when possible
+- Short sentences, simple vocabulary
+- Frequent check-ins: "How are you feeling about this?" / "Does that make sense so far?"
+- Use emoji sparingly for encouragement: ⭐ 🎯 💪
+- Format responses with clear visual structure (bullets, bold, numbered steps)
+
+## What You Must NEVER Do
+
+- Never say "This is easy" or "You should know this"
+- Never give the full answer — always scaffold toward discovery
+- Never give multi-step instructions all at once
+- Never tell a student to "just focus" or "try harder"
+- Never ignore emotional cues to push through content
+- Never use sarcasm or irony — some students take things literally
+- Never compare the student to others"""
 
 
 # ──────────────────────────────────────────────
@@ -77,30 +120,54 @@ def load_finetuned_model(
     base_model: str = "google/gemma-4-e4b",
     max_seq_length: int = 4096,
 ):
-    """Load a fine-tuned model with LoRA adapters.
+    """Load a fine-tuned model with LoRA adapters via Unsloth's native loading.
     
     Used by Notebook 3 (eval) and Notebook 4 (demo) to load the EduTutor
     model after fine-tuning.
+    
+    This uses Unsloth's own adapter loading path rather than raw PeftModel,
+    ensuring compatibility with FastLanguageModel.for_inference().
     """
     global _model, _tokenizer
     
+    # Clear any previously loaded model to free VRAM
+    if _model is not None:
+        del _model
+        _model = None
+        torch.cuda.empty_cache()
+    
     from unsloth import FastLanguageModel
     
-    print(f"📦 Loading base model: {base_model}")
+    assert torch.cuda.is_available(), (
+        "GPU required! Enable T4/A100 in Kaggle or use Colab Pro."
+    )
+    
+    print(f"📦 Loading fine-tuned model from: {adapter_path}")
+    print(f"   Base model: {base_model}")
+    
+    # Unsloth can load adapters directly via from_pretrained
+    # by pointing model_name at the adapter directory
     _model, _tokenizer = FastLanguageModel.from_pretrained(
-        model_name=base_model,
+        model_name=adapter_path,
         max_seq_length=max_seq_length,
         load_in_4bit=True,
         dtype=None,
     )
     
-    print(f"🔌 Loading adapter from: {adapter_path}")
-    from peft import PeftModel
-    _model = PeftModel.from_pretrained(_model, adapter_path)
-    
     FastLanguageModel.for_inference(_model)
-    print(f"✅ Fine-tuned EduTutor loaded.")
+    print(f"✅ Fine-tuned EduTutor loaded from {adapter_path}")
     return _model, _tokenizer
+
+
+def unload_model():
+    """Unload the current model to free VRAM for loading a different one."""
+    global _model, _tokenizer
+    if _model is not None:
+        del _model
+        _model = None
+        torch.cuda.empty_cache()
+        print("🗑️  Model unloaded, VRAM freed.")
+    _tokenizer = None
 
 
 # ──────────────────────────────────────────────
@@ -163,6 +230,57 @@ def generate_text(
     return response
 
 
+def _extract_json(text: str) -> dict | None:
+    """Extract the first valid JSON object from text using balanced brace matching.
+    
+    Handles arbitrarily nested JSON (unlike a simple regex), which is
+    required for the judge rubric's nested score objects.
+    """
+    # Find the first opening brace
+    start = text.find("{")
+    if start == -1:
+        return None
+    
+    depth = 0
+    in_string = False
+    escape_next = False
+    
+    for i in range(start, len(text)):
+        char = text[i]
+        
+        if escape_next:
+            escape_next = False
+            continue
+        
+        if char == "\\":
+            escape_next = True
+            continue
+        
+        if char == '"':
+            in_string = not in_string
+            continue
+        
+        if in_string:
+            continue
+        
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                candidate = text[start:i + 1]
+                try:
+                    return json.loads(candidate)
+                except json.JSONDecodeError:
+                    # Try the next opening brace
+                    next_start = text.find("{", start + 1)
+                    if next_start != -1:
+                        return _extract_json(text[next_start:])
+                    return None
+    
+    return None
+
+
 def generate_json(
     prompt: str,
     max_new_tokens: int = 800,
@@ -173,7 +291,8 @@ def generate_json(
     This is the drop-in replacement for API calls with:
         response_mime_type="application/json"
     
-    It generates text, then extracts the first valid JSON object.
+    It generates text, then extracts the first valid JSON object
+    using balanced brace matching (supports arbitrary nesting depth).
     """
     raw = generate_text(
         prompt,
@@ -182,18 +301,14 @@ def generate_json(
         top_p=0.95,
     )
     
-    # Try to extract JSON from the response
-    # Look for { ... } pattern
-    json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', raw, re.DOTALL)
-    if json_match:
-        try:
-            return json.loads(json_match.group())
-        except json.JSONDecodeError:
-            pass
+    # Use the robust balanced-brace extractor
+    result = _extract_json(raw)
+    if result is not None:
+        return result
     
-    # Fallback: try the whole response
+    # Fallback: try the whole response as JSON
     try:
-        return json.loads(raw)
+        return json.loads(raw.strip())
     except json.JSONDecodeError:
         print(f"  [WARN] Could not parse JSON from response: {raw[:200]}...")
         return None
