@@ -199,6 +199,21 @@ def unload_model():
 # Text Generation (replaces API calls)
 # ──────────────────────────────────────────────
 
+def _prepare_chat_inputs(messages: list[dict]) -> tuple[torch.Tensor, torch.Tensor]:
+    """Tokenize chat messages and build an explicit attention mask.
+
+    Gemma/Unsloth can warn when `pad_token_id == eos_token_id` and no mask is
+    provided, so we construct one directly for reliable generation.
+    """
+    input_ids = _tokenizer.apply_chat_template(
+        messages,
+        tokenize=True,
+        add_generation_prompt=True,
+        return_tensors="pt",
+    ).to("cuda")
+    attention_mask = torch.ones_like(input_ids)
+    return input_ids, attention_mask
+
 def generate_text(
     prompt: str,
     max_new_tokens: int = 2048,
@@ -231,16 +246,12 @@ def generate_text(
     else:
         messages = [{"role": "user", "content": prompt}]
     
-    inputs = _tokenizer.apply_chat_template(
-        messages,
-        tokenize=True,
-        add_generation_prompt=True,
-        return_tensors="pt",
-    ).to("cuda")
+    inputs, attention_mask = _prepare_chat_inputs(messages)
     
     with torch.no_grad():
         outputs = _model.generate(
             input_ids=inputs,
+            attention_mask=attention_mask,
             max_new_tokens=max_new_tokens,
             temperature=temperature,
             top_p=top_p,
@@ -358,16 +369,12 @@ def generate_chat_response(
     """
     assert _model is not None, "Call load_teacher_model() or load_finetuned_model() first!"
     
-    inputs = _tokenizer.apply_chat_template(
-        messages,
-        tokenize=True,
-        add_generation_prompt=True,
-        return_tensors="pt",
-    ).to("cuda")
+    inputs, attention_mask = _prepare_chat_inputs(messages)
     
     with torch.no_grad():
         outputs = _model.generate(
             input_ids=inputs,
+            attention_mask=attention_mask,
             max_new_tokens=max_new_tokens,
             temperature=temperature,
             top_p=0.9,
