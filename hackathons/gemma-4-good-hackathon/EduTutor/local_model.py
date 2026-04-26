@@ -10,6 +10,7 @@ Usage in any notebook:
 """
 import torch
 import json
+import os
 import re
 from pathlib import Path
 
@@ -64,10 +65,22 @@ _model = None
 _tokenizer = None
 
 
+def _resolve_cache_dir(cache_dir: str | Path | None = None) -> str | None:
+    """Return the configured model cache directory, creating it when possible."""
+    resolved = cache_dir or os.environ.get("EDUTUTOR_CACHE_DIR") or os.environ.get("HF_HOME")
+    if resolved is None:
+        return None
+
+    path = Path(resolved)
+    path.mkdir(parents=True, exist_ok=True)
+    return str(path)
+
+
 def load_teacher_model(
     model_name: str = "google/gemma-4-e4b",
     max_seq_length: int = 4096,
     load_in_4bit: bool = True,
+    cache_dir: str | Path | None = None,
 ):
     """Load a Gemma 4 model locally via Unsloth for data generation / judging.
     
@@ -80,6 +93,8 @@ def load_teacher_model(
                     For higher quality data gen, use "google/gemma-4-26b-a4b" if you have >40GB VRAM.
         max_seq_length: Context window. 4096 is enough for tutoring conversations.
         load_in_4bit: Use QLoRA quantization. Set False if you have enough VRAM.
+        cache_dir: Optional HuggingFace/Unsloth cache directory. Defaults to
+                   EDUTUTOR_CACHE_DIR or HF_HOME when set by the notebooks.
     
     Returns:
         (model, tokenizer) tuple
@@ -99,6 +114,10 @@ def load_teacher_model(
     gpu_name = torch.cuda.get_device_name(0)
     gpu_mem = torch.cuda.get_device_properties(0).total_mem / 1e9
     print(f"🖥️  GPU: {gpu_name} ({gpu_mem:.1f} GB)")
+
+    resolved_cache_dir = _resolve_cache_dir(cache_dir)
+    if resolved_cache_dir:
+        print(f"🗄️  Cache: {resolved_cache_dir}")
     
     print(f"📦 Loading {model_name} (4-bit={load_in_4bit})...")
     _model, _tokenizer = FastLanguageModel.from_pretrained(
@@ -106,6 +125,7 @@ def load_teacher_model(
         max_seq_length=max_seq_length,
         load_in_4bit=load_in_4bit,
         dtype=None,  # auto-detect
+        cache_dir=resolved_cache_dir,
     )
     
     FastLanguageModel.for_inference(_model)
@@ -119,6 +139,7 @@ def load_finetuned_model(
     adapter_path: str,
     base_model: str = "google/gemma-4-e4b",
     max_seq_length: int = 4096,
+    cache_dir: str | Path | None = None,
 ):
     """Load a fine-tuned model with LoRA adapters via Unsloth's native loading.
     
@@ -142,8 +163,11 @@ def load_finetuned_model(
         "GPU required! Enable T4/A100 in Kaggle or use Colab Pro."
     )
     
+    resolved_cache_dir = _resolve_cache_dir(cache_dir)
     print(f"📦 Loading fine-tuned model from: {adapter_path}")
     print(f"   Base model: {base_model}")
+    if resolved_cache_dir:
+        print(f"   Cache: {resolved_cache_dir}")
     
     # Unsloth can load adapters directly via from_pretrained
     # by pointing model_name at the adapter directory
@@ -152,6 +176,7 @@ def load_finetuned_model(
         max_seq_length=max_seq_length,
         load_in_4bit=True,
         dtype=None,
+        cache_dir=resolved_cache_dir,
     )
     
     FastLanguageModel.for_inference(_model)
