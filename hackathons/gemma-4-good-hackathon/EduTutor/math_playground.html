@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Adaptive Math Playground</title>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@18.2.0",
+        "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+        "tldraw": "https://esm.sh/tldraw@2"
+      }
+    }
+  </script>
+  <link rel="stylesheet" href="https://esm.sh/tldraw@2/tldraw.css">
+  <style>
+    body { margin: 0; padding: 0; font-family: sans-serif; overflow: hidden; background: #f0f4f8; }
+    #root { width: 100vw; height: 100vh; }
+    .overlay { position: absolute; top: 10px; left: 10px; z-index: 1000; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 300px; border: 2px solid #667eea; }
+    .overlay h3 { margin: 0 0 8px 0; color: #333; }
+    .overlay p { margin: 0; color: #666; font-size: 14px; }
+    .hint { margin-top: 10px; padding: 8px; background: #fff3cd; border-left: 4px solid #ffc107; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel" data-type="module">
+    import React, { useState, useEffect } from 'react';
+    import { createRoot } from 'react-dom/client';
+    import { Tldraw, createShapeId } from 'tldraw';
+
+    function MathPlayground() {
+      const [scenario, setScenario] = useState(null);
+      const [editor, setEditor] = useState(null);
+
+      useEffect(() => {
+        const handleMessage = (event) => {
+          if (event.data && event.data.type === 'SCENARIO_UPDATE') {
+            setScenario(event.data.payload);
+          }
+        };
+        window.addEventListener('message', handleMessage);
+        
+        // Send a ready message to parent window (Gradio)
+        window.parent.postMessage({ type: 'PLAYGROUND_READY' }, '*');
+        
+        // Default scenario for demo purposes
+        setScenario({
+            title: "Equivalent Fractions",
+            concept: "Fractions on a Number Line",
+            scaffolding_hints: ["Let's visualize 1/4 and 2/4."],
+            playground_state: { tool: "fraction_bars" }
+        });
+        
+        return () => window.removeEventListener('message', handleMessage);
+      }, []);
+
+      useEffect(() => {
+        if (editor && scenario) {
+            editor.deleteShapes(editor.getCurrentPageShapeIds());
+            
+            // Render scenario shapes based on tools
+            const shapes = [];
+            let yOffset = 100;
+            
+            if (scenario.playground_state && scenario.playground_state.tool === 'fraction_bars') {
+                shapes.push({
+                    id: createShapeId(),
+                    type: 'geo',
+                    x: 100,
+                    y: yOffset,
+                    props: { w: 150, h: 50, geo: 'rectangle', color: 'blue', fill: 'semi', text: '1/4', size: 'm' }
+                });
+                shapes.push({
+                    id: createShapeId(),
+                    type: 'geo',
+                    x: 260,
+                    y: yOffset,
+                    props: { w: 150, h: 50, geo: 'rectangle', color: 'green', fill: 'semi', text: '2/4', size: 'm' }
+                });
+            } else if (scenario.playground_state && scenario.playground_state.tool === 'number_line') {
+                shapes.push({
+                    id: createShapeId(),
+                    type: 'arrow',
+                    x: 100,
+                    y: yOffset,
+                    props: { start: { x: 0, y: 0 }, end: { x: 400, y: 0 }, arrowheadEnd: 'arrow', arrowheadStart: 'arrow' }
+                });
+            } else {
+                shapes.push({
+                    id: createShapeId(),
+                    type: 'text',
+                    x: 100,
+                    y: yOffset,
+                    props: { text: 'Welcome to the Interactive Playground! Drag and drop shapes to learn.', color: 'black' }
+                });
+            }
+            editor.createShapes(shapes);
+        }
+      }, [editor, scenario]);
+
+      return (
+        <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+          {scenario && (
+            <div className="overlay">
+              <h3>{scenario.title || 'Math Playground'}</h3>
+              <p><strong>Concept:</strong> {scenario.concept}</p>
+              {scenario.scaffolding_hints && scenario.scaffolding_hints.length > 0 && (
+                  <div className="hint">
+                    <strong>Hint:</strong> {scenario.scaffolding_hints[0]}
+                  </div>
+              )}
+            </div>
+          )}
+          <Tldraw onMount={setEditor} />
+        </div>
+      );
+    }
+
+    const root = createRoot(document.getElementById('root'));
+    root.render(<MathPlayground />);
+  </script>
+</body>
+</html>
