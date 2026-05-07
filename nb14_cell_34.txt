@@ -1,0 +1,7 @@
+## 9. Comparison: Code Agent vs. Direct Reasoning
+
+When does code execution help? Let's test the same questions with:
+1. **Direct reasoning** — LLM answers purely from its parametric knowledge
+2. **Code agent** — LLM writes code, executes it, reports results
+
+We expect code to win on **computation** but not on **general knowledge**.

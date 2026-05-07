@@ -1,0 +1,24 @@
+error_tests = [
+    ("Syntax Error", "def foo(\n  return 1"),
+    ("Name Error", "print(undefined_variable)"),
+    ("Type Error", "result = 'hello' + 42"),
+    ("Zero Division", "x = 1 / 0"),
+    ("Index Error", "lst = [1,2,3]\nprint(lst[10])"),
+    ("Key Error", "d = {'a': 1}\nprint(d['b'])"),
+    ("Value Error", "int('not_a_number')"),
+    ("Import Error", "import numpy"),
+]
+
+print("=" * 70)
+print(f"{'ERROR HANDLING DEMO':^70}")
+print("=" * 70)
+
+for name, code_str in error_tests:
+    result = executor.execute(code_str)
+    formatted = executor.format_result(result)
+    # Show just the first line of the formatted result
+    first_line = formatted.split("\n")[0]
+    error_info = result.get("error", "")[:60] or (result.get("issues", [{}])[0].get("detail", "")[:60] if result.get("issues") else "")
+    print(f"\n{name}:")
+    print(f"  Code:  {code_str[:50]}...")
+    print(f"  Error: {error_info}")

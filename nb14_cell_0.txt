@@ -1,0 +1,31 @@
+# Code Execution Tool — Safe Code Generation and Execution
+
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/cyruslayo/castalia/blob/main/agents/14_code_execution_tool.ipynb)
+
+## What This Notebook Teaches You
+
+An agent that can **write and run code** can solve problems that are impossible with static tools alone. Need to compute a complex formula? Filter a dataset? Implement an algorithm? A code-execution agent writes the Python, runs it, inspects the output, and iterates until it succeeds.
+
+But code execution is also the most **dangerous** capability you can give an agent. Unrestricted `exec()` is a security nightmare. This notebook builds a safe, sandboxed code execution tool from first principles.
+
+**Research foundation**:
+- Gao et al. 2023, *"PAL: Program-Aided Language Models"* — showed that generating code for computation dramatically outperforms pure reasoning
+- Chen et al. 2023, *"Program of Thoughts Prompting"* — decoupled reasoning from computation by generating programs
+- Wang et al. 2024, *"Executable Code Actions Elicit Better LLM Agents"* — agents that execute code outperform those using fixed tool APIs
+
+By the end of this notebook, you will:
+
+1. **Understand why code execution is a game-changer** for agent capabilities
+2. **Identify security risks** — what can go wrong with unrestricted exec
+3. **Build a Sandbox class** with restricted builtins, import whitelists, and timeouts
+4. **Build a CodeExecutor tool** with execute, validate, and format_result methods
+5. **Test the sandbox** against dangerous code patterns
+6. **Build a CodeAgent** that writes Python to solve problems using ReAct
+7. **Implement iterative code refinement** — write, run, fix, rerun
+8. **Compare code-agent vs. direct reasoning** on computational tasks
+
+---
+
+> **Prerequisites**: Notebooks 01–04, 13 (tool design).
+> **Runtime**: Google Colab with T4 GPU.
+> **Time**: ~55–70 minutes.

@@ -1,0 +1,11 @@
+print("=" * 60)
+print("TASK 4: Algorithm Implementation")
+print("=" * 60)
+result = code_agent.run(
+    "Implement and run a prime sieve (Sieve of Eratosthenes) to find all prime numbers "
+    "up to 100. Then calculate: 1) How many primes are there below 100? "
+    "2) What's the sum of all primes below 100? 3) What's the largest prime gap? "
+    "4) What's the twin prime pairs (primes differing by 2)?"
+)
+print(f"\nFinal answer: {result['answer'][:400]}...")
+print(f"Code runs: {result['code_runs']}")

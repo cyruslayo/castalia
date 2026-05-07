@@ -1,0 +1,46 @@
+## 12. Summary & Key Takeaways
+
+### What We Built
+
+| Component | Purpose |
+|-----------|---------|
+| **Sandbox** | Restricted Python environment with static analysis, import whitelist, timeout |
+| **CodeExecutor** | Tool wrapper with execute, validate, format_result, and history tracking |
+| **CodeAgent** | ReAct-style agent that writes code, runs it, and iterates on errors |
+
+### Security Layers
+
+```
+Layer 1: Static Analysis    → Block dangerous patterns before execution
+Layer 2: AST Import Check   → Only allow whitelisted modules
+Layer 3: Restricted Builtins → Remove __import__, exec, eval, open, compile
+Layer 4: Safe Import Hook    → Runtime import filtering
+Layer 5: Timeout             → Kill long-running code
+Layer 6: Output Capture      → Isolate stdout/stderr
+```
+
+### When to Use Code Execution
+
+| ✅ Use Code Execution | ❌ Use Fixed Tools Instead |
+|---|---|
+| Complex computation | Simple lookups |
+| Data transformation | Standard API calls |
+| Algorithm implementation | File operations (use dedicated tool) |
+| Statistical analysis | Network requests (use HTTP tool) |
+| String processing | Database queries (use DB tool) |
+
+### Key Lessons
+
+1. **Defense in depth** — no single security layer is sufficient. Stack them.
+2. **Static analysis before execution** — catch problems before they run.
+3. **Helpful error messages** — the agent needs to understand failures to fix them.
+4. **Iterative refinement** — plan for the agent to need 2-3 attempts on hard problems.
+5. **Know the limits** — thread-based timeout is imperfect; production needs containers.
+
+### What's Next
+
+In **Notebook 15**, we'll explore **multi-agent systems** — multiple specialized agents collaborating on complex tasks, each with their own tool sets and capabilities.
+
+---
+
+*"The ability to write and execute code transforms an LLM from a knowledge system into a problem-solving system."*

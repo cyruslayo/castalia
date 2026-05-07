@@ -1,0 +1,103 @@
+# Production Sandbox Orchestration
+# 
+# Usage:
+#   docker-compose -f docker-compose.sandbox.yml up -d
+#   docker-compose -f docker-compose.sandbox.yml down
+#
+# This sets up a persistent sandbox environment with resource governance.
+
+version: "3.8"
+
+services:
+  sandbox:
+    build:
+      context: .
+      dockerfile: sandbox.Dockerfile
+    image: castalia-sandbox:latest
+    container_name: castalia-sandbox
+    
+    # ── Resource Limits ────────────────────────────────────────
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 64M
+    
+    # ── Security Options ─────────────────────────────────────
+    security_opt:
+      - no-new-privileges:true
+      - seccomp:./seccomp-profile.json
+    cap_drop:
+      - ALL
+    cap_add:
+      - SYS_PTRACE  # Optional: for debugging only
+    
+    # ── Network Isolation ────────────────────────────────────
+    network_mode: none
+    
+    # ── Filesystem ────────────────────────────────────────────
+    read_only: true
+    tmpfs:
+      - /tmp:size=100M,exec,nodev,nosuid
+      - /var/tmp:size=50M,nodev,nosuid
+    
+    # ── User ──────────────────────────────────────────────────
+    user: "1000:1000"
+    
+    # ── Runtime Configuration ─────────────────────────────────
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONHASHSEED=random
+      - HOME=/tmp
+    
+    # ── Health Check ────────────────────────────────────────
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
+    
+    # ── Logging ──────────────────────────────────────────────
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "sandbox.execution_id,sandbox.user_id"
+    
+    # ── Restart Policy ───────────────────────────────────────
+    restart: "no"  # Never restart — each execution is a fresh container
+    
+    # ── Pid Limit ───────────────────────────────────────────
+    pid: host  # Required for some monitoring, or set pids_limit
+    # Alternative: pids_limit: 100
+
+  # Optional: Monitoring sidecar
+  monitor:
+    image: prom/node-exporter:latest
+    container_name: castalia-monitor
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    ports:
+      - "9100:9100"
+    networks:
+      - sandbox-monitor
+    profiles:
+      - monitoring  # Only started with --profile monitoring
+
+networks:
+  sandbox-monitor:
+    driver: bridge
+    internal: true  # No external access

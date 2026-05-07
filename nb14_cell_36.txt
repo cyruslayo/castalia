@@ -1,0 +1,27 @@
+print("\n" + "=" * 70)
+print(f"{'COMPARISON SUMMARY':^70}")
+print("=" * 70)
+print(f"\n{'Task':<25} {'Type':<15} {'Direct':<12} {'Code Agent':<12}")
+print("-" * 65)
+for r in results_table:
+    direct = "✓" if r["direct_correct"] else "✗"
+    code_a = "✓" if r["code_correct"] else "✗"
+    print(f"{r['task']:<25} {r['type']:<15} {direct:<12} {code_a:<12}")
+
+direct_score = sum(1 for r in results_table if r["direct_correct"])
+code_score = sum(1 for r in results_table if r["code_correct"])
+total = len(results_table)
+print(f"\nDirect reasoning: {direct_score}/{total} correct")
+print(f"Code agent:       {code_score}/{total} correct")
+
+print("\n--- Key Insight ---")
+print("Code execution excels at:")
+print("  • Precise numerical computation (no rounding errors)")
+print("  • Complex multi-step calculations")
+print("  • Problems requiring iteration or algorithms")
+print("  • Data manipulation and analysis")
+print("\nDirect reasoning excels at:")
+print("  • General knowledge questions")
+print("  • Qualitative analysis and opinions")
+print("  • Tasks where writing code is slower than just answering")
+print("  • Creative or open-ended tasks")

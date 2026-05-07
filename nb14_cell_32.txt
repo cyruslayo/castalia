@@ -1,0 +1,20 @@
+print("=" * 60)
+print("ITERATIVE REFINEMENT TEST")
+print("=" * 60)
+print("\nThis problem requires careful code — the agent may need multiple attempts:\n")
+
+result = code_agent.run(
+    "Write a function that converts a Roman numeral string to an integer. "
+    "Test it with: III=3, IV=4, IX=9, XLII=42, XCIX=99, CDXLIV=444, MCMXCIV=1994, MMXXIV=2024. "
+    "Print each test case showing input and output, and whether it matches the expected value."
+)
+print(f"\nFinal answer: {result['answer'][:400]}...")
+print(f"Total iterations: {len(result['iterations'])}")
+print(f"Code runs: {result['code_runs']}")
+print("\nIteration breakdown:")
+for it in result["iterations"]:
+    if it["type"] == "code":
+        status = "✓" if it["result"]["success"] else "✗"
+        print(f"  Iteration {it['iteration']}: {status} Code ({len(it['code'])} chars)")
+    elif it["type"] == "answer":
+        print(f"  Iteration {it['iteration']}: ANSWER")

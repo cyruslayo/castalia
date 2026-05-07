@@ -1,0 +1,58 @@
+def direct_reasoning(query: str) -> str:
+    """Ask the LLM to answer without any tools."""
+    messages = [
+        {"role": "system", "content": "Answer the question directly. Show your work. Be precise with numbers."},
+        {"role": "user", "content": query},
+    ]
+    return generate(messages, max_new_tokens=400, temperature=0.3)
+
+comparison_tasks = [
+    {
+        "name": "Large Factorial",
+        "query": "What is 20 factorial (20!)? Give the exact number.",
+        "exact_answer": "2432902008176640000",
+        "type": "computation",
+    },
+    {
+        "name": "Sum of Squares",
+        "query": "What is the sum of squares of all integers from 1 to 50?",
+        "exact_answer": "42925",
+        "type": "computation",
+    },
+    {
+        "name": "Compound Interest",
+        "query": "If I invest $10000 at 7.5% annual interest compounded monthly for 15 years, what's the final amount? Give the answer to 2 decimal places.",
+        "exact_answer": "30632.43",
+        "type": "computation",
+    },
+]
+
+print("=" * 70)
+print(f"{'CODE AGENT vs. DIRECT REASONING':^70}")
+print("=" * 70)
+
+results_table = []
+for task in comparison_tasks:
+    print(f"\n--- {task['name']} ---")
+    print(f"Query: {task['query']}")
+    print(f"Exact answer: {task['exact_answer']}\n")
+
+    # Direct reasoning
+    print("Direct reasoning:")
+    direct = direct_reasoning(task["query"])
+    direct_has_answer = task["exact_answer"] in direct
+    print(f"  Response: {direct[:150]}...")
+    print(f"  Contains exact answer: {direct_has_answer}")
+
+    # Code agent
+    print("\nCode agent:")
+    code_result = code_agent.run(task["query"], verbose=False)
+    code_has_answer = task["exact_answer"] in str(code_result.get("answer", ""))
+    print(f"  Answer: {str(code_result['answer'])[:150]}...")
+    print(f"  Contains exact answer: {code_has_answer}")
+    print(f"  Code runs: {code_result['code_runs']}")
+
+    results_table.append({
+        "task": task["name"], "type": task["type"],
+        "direct_correct": direct_has_answer, "code_correct": code_has_answer,
+    })

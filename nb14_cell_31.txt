@@ -1,0 +1,3 @@
+## 8. Iterative Code Refinement
+
+The real power of a CodeAgent is **self-correction**: when code fails, the agent reads the error, understands it, and writes fixed code. Let's test this with deliberately tricky problems.

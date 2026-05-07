@@ -1,0 +1,5 @@
+## 📚 References & Further Reading
+
+- [Hugging Face Documentation](https://huggingface.co/docs)
+- [LLM Course Resources](https://github.com/cyruslayo/castalia)
+- Explore related notebooks in the agents/ directory

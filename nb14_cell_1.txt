@@ -1,0 +1,9 @@
+## 🎯 Learning Objectives
+
+By the end of this notebook, you will:
+
+- Understand **What This Notebook Teaches You**
+- Understand **: Environment Setup**
+- Understand **Why Code Execution Is a Game-Changer**
+- Understand **Security Risks — Why Unrestricted exec() Is Dangerous**
+- Understand **Building the Sandbox**

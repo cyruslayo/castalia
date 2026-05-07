@@ -1,0 +1,13 @@
+print("Testing timeout protection (5-second limit)...\n")
+
+# Infinite loop
+result = sandbox.execute("while True: pass")
+print(f"Infinite loop: {'BLOCKED' if not result['success'] else 'ALLOWED!'}")
+print(f"  Error: {result['error']}")
+print(f"  Time: {result['execution_time']}s")
+
+# Long computation (should finish within timeout)
+result = sandbox.execute("total = sum(i*i for i in range(1000000))\nprint(f'Sum of squares: {total}')")
+print(f"\nLong but finite computation: {'OK' if result['success'] else 'FAILED'}")
+print(f"  Output: {result['stdout'].strip()}")
+print(f"  Time: {result['execution_time']}s")

@@ -1,0 +1,21 @@
+safe_tests = [
+    ("Basic math", "print(2 + 3 * 4)"),
+    ("List comprehension", "squares = [x**2 for x in range(10)]\nprint(squares)"),
+    ("String operations", "text = 'hello world'\nprint(text.upper())\nprint(len(text))"),
+    ("Math module", "import math\nprint(math.sqrt(144))\nprint(math.pi)"),
+    ("Statistics", "import statistics\ndata = [10, 20, 30, 40, 50]\nprint(statistics.mean(data))\nprint(statistics.stdev(data))"),
+    ("Collections", "from collections import Counter\nwords = ['a','b','a','c','b','a']\nprint(Counter(words))"),
+    ("JSON processing", "import json\ndata = {'name': 'Alice', 'scores': [90, 85, 92]}\nprint(json.dumps(data, indent=2))"),
+    ("Regex", "import re\ntext = 'My email is user@example.com and phone is 555-1234'\nprint(re.findall(r'[\\w.]+@[\\w.]+', text))"),
+    ("Itertools", "import itertools\nperms = list(itertools.permutations([1,2,3]))\nprint(f'Permutations of [1,2,3]: {len(perms)} total')"),
+    ("Datetime", "from datetime import datetime, timedelta\nnow = datetime(2024, 6, 15)\nfuture = now + timedelta(days=30)\nprint(f'30 days from {now.date()} is {future.date()}')"),
+]
+
+print("=" * 70)
+print(f"{'SAFE CODE TESTS':^70}")
+print("=" * 70)
+for name, code_str in safe_tests:
+    result = sandbox.execute(code_str)
+    status = "✓" if result["success"] else "✗"
+    output = result["stdout"].strip()[:60] if result["success"] else result["error"][:60]
+    print(f"  {status} {name:<25} → {output}")

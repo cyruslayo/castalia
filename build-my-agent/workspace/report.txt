@@ -1,0 +1,14 @@
+Research Report
+================
+
+1. Speed of Light:
+   - 299,792,458 m/s (retrieved from knowledge base)
+
+2. Capital of France:
+   - Paris (retrieved from knowledge base)
+
+3. Light-Year Calculation:
+   - Time for light to travel 1 light-year: 1 year (by definition, a light-year is the distance light travels in one year)
+   - The distance from the Sun to Earth is approximately 8.3 light-minutes (about 150 million km)
+
+All research tasks completed successfully.

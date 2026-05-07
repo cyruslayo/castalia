@@ -1,0 +1,3 @@
+### 4.2 — Dangerous Code Should Be Blocked
+
+Now let's verify that every attack vector is caught.

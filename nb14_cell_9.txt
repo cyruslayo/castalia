@@ -1,0 +1,5 @@
+## 4. Testing the Sandbox
+
+### 4.1 — Safe Code Should Work
+
+Let's verify that legitimate computational code runs fine.

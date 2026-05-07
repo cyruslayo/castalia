@@ -1,0 +1,58 @@
+# Show what IS possible within the sandbox
+advanced_examples = [
+    ("Recursive Fibonacci with memoization", """
+from functools import lru_cache
+
+@lru_cache(maxsize=None)
+def fib(n):
+    if n < 2:
+        return n
+    return fib(n-1) + fib(n-2)
+
+for i in range(0, 31, 5):
+    print(f"fib({i}) = {fib(i)}")
+"""),
+    ("Statistical analysis with collections", """
+from collections import Counter
+import statistics
+
+data = [23, 45, 12, 67, 34, 89, 23, 45, 56, 78, 23, 45, 12, 90, 34]
+counter = Counter(data)
+print(f"Data: {data}")
+print(f"Most common: {counter.most_common(3)}")
+print(f"Mean: {statistics.mean(data):.1f}")
+print(f"Median: {statistics.median(data)}")
+print(f"Stdev: {statistics.stdev(data):.1f}")
+print(f"Quartiles: Q1={statistics.quantiles(data)[0]}, Q3={statistics.quantiles(data)[2]}")
+"""),
+    ("Matrix operations (no numpy needed)", """
+def mat_mul(A, B):
+    rows_a, cols_a = len(A), len(A[0])
+    rows_b, cols_b = len(B), len(B[0])
+    result = [[0]*cols_b for _ in range(rows_a)]
+    for i in range(rows_a):
+        for j in range(cols_b):
+            for k in range(cols_a):
+                result[i][j] += A[i][k] * B[k][j]
+    return result
+
+A = [[1, 2], [3, 4]]
+B = [[5, 6], [7, 8]]
+C = mat_mul(A, B)
+print(f"A = {A}")
+print(f"B = {B}")
+print(f"A × B = {C}")
+"""),
+]
+
+print("=" * 60)
+print("ADVANCED SANDBOX CAPABILITIES")
+print("=" * 60)
+
+for name, code_str in advanced_examples:
+    print(f"\n--- {name} ---")
+    result = executor.execute(code_str)
+    if result["success"]:
+        print(result["stdout"])
+    else:
+        print(f"  Error: {result['error']}")

@@ -1,0 +1,78 @@
+class CodeExecutor:
+    """Production code execution tool built on the Sandbox."""
+
+    def __init__(self, timeout: int = 5):
+        self.sandbox = Sandbox(timeout=timeout)
+        self.history: List[dict] = []
+
+    def execute(self, code_string: str) -> dict:
+        """Execute code safely and return a structured result."""
+        # Clean up the code
+        code_string = textwrap.dedent(code_string).strip()
+        if not code_string:
+            return {"success": False, "error": "Empty code string. Please provide Python code to execute."}
+
+        result = self.sandbox.execute(code_string)
+
+        # Record in history
+        self.history.append({
+            "code": code_string,
+            "result": result,
+            "timestamp": time.time(),
+        })
+
+        return result
+
+    def validate(self, code_string: str) -> dict:
+        """Pre-check code safety without executing."""
+        return self.sandbox.validate(code_string)
+
+    def format_result(self, result: dict) -> str:
+        """Format execution result as a human-readable string for the agent."""
+        lines = []
+        if result["success"]:
+            lines.append("✓ Code executed successfully.")
+            if result["stdout"]:
+                lines.append(f"Output:\n{result['stdout']}")
+            if result.get("return_value"):
+                lines.append(f"Return value: {result['return_value']}")
+            lines.append(f"Execution time: {result['execution_time']}s")
+        else:
+            lines.append(f"✗ Code execution failed: {result['error']}")
+            if result.get("issues"):
+                lines.append("Safety issues found:")
+                for issue in result["issues"]:
+                    lines.append(f"  - {issue.get('type', 'unknown')}: {issue.get('detail', issue.get('module', ''))}")
+            if result.get("stdout"):
+                lines.append(f"Partial output:\n{result['stdout']}")
+            if result.get("stderr"):
+                lines.append(f"Error trace:\n{result['stderr'][:500]}")
+        return "\n".join(lines)
+
+    def get_stats(self) -> dict:
+        total = len(self.history)
+        successes = sum(1 for h in self.history if h["result"]["success"])
+        avg_time = statistics.mean(h["result"].get("execution_time", 0) for h in self.history) if self.history else 0
+        return {
+            "total_executions": total,
+            "successes": successes,
+            "failures": total - successes,
+            "success_rate": f"{successes/total:.1%}" if total else "N/A",
+            "avg_execution_time": f"{avg_time:.4f}s",
+        }
+
+executor = CodeExecutor(timeout=5)
+
+# Test it
+print("--- CodeExecutor Demo ---\n")
+
+result = executor.execute("""
+import math
+numbers = [16, 25, 36, 49, 64, 81, 100]
+roots = [math.sqrt(n) for n in numbers]
+for n, r in zip(numbers, roots):
+    print(f"sqrt({n}) = {r:.1f}")
+print(f"\nSum of roots: {sum(roots):.2f}")
+""")
+
+print(executor.format_result(result))

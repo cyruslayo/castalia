@@ -1,0 +1,3 @@
+## Part 0: Environment Setup
+
+Same Qwen3-8B setup. The model will write Python code, and our sandbox will execute it safely.

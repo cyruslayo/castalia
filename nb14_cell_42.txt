@@ -1,0 +1,9 @@
+## 🏋️ Exercises
+
+Put your understanding to the test:
+
+**Exercise 1 — Explore:** extend the agent with a new tool. Document what changes and why.
+
+**Exercise 2 — Build:** add error handling for a failure mode discussed in this notebook. Compare your implementation to the one in this notebook.
+
+**Exercise 3 — Extend:** trace through the agent loop manually and predict the output before running.

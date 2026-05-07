@@ -1,0 +1,11 @@
+print("=" * 60)
+print("TASK 3: String Manipulation")
+print("=" * 60)
+result = code_agent.run(
+    "Given the text: 'The quick brown fox jumps over the lazy dog. "
+    "The dog barked at the fox. The fox ran away quickly.' "
+    "1) Count word frequencies, 2) Find the most common word (excluding 'the'), "
+    "3) Calculate the average word length, 4) Find all unique words sorted alphabetically."
+)
+print(f"\nFinal answer: {result['answer'][:400]}...")
+print(f"Code runs: {result['code_runs']}")

@@ -1,0 +1,10 @@
+print("=" * 60)
+print("TASK 1: Complex Math Computation")
+print("=" * 60)
+result = code_agent.run(
+    "Calculate the first 20 Fibonacci numbers. Then find the golden ratio "
+    "by dividing each consecutive pair (F(n+1)/F(n)) for the last 5 pairs. "
+    "Show how the ratios converge to phi (1.6180339...)."
+)
+print(f"\nFinal answer: {result['answer'][:300]}...")
+print(f"Code runs: {result['code_runs']}")

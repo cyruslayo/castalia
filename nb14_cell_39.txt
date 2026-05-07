@@ -1,0 +1,52 @@
+## 11. Limitations and Production Considerations
+
+### What Our Sandbox Cannot Do
+
+| Limitation | Why | Mitigation |
+|-----------|-----|------------|
+| **No file I/O** | Security risk | Pass data via function arguments |
+| **No networking** | Data exfiltration risk | Use separate API tools for network access |
+| **No pip install** | Supply chain attacks | Pre-install needed packages |
+| **Thread-based timeout** | Thread can't be truly killed in CPython | Use subprocess with hard kill in production |
+| **No memory limit** | StringIO can grow unbounded | Use resource limits (Unix) or container limits |
+| **Shared process space** | Sandbox shares memory with host | Use Docker/gVisor in production |
+
+### Production Architecture
+
+```
+┌─────────────────────────────────────────────────┐
+│                PRODUCTION SETUP                  │
+├─────────────────────────────────────────────────┤
+│                                                  │
+│  Agent (Main Process)                            │
+│    │                                             │
+│    │  code string                                │
+│    ▼                                             │
+│  ┌──────────────────────┐                        │
+│  │ Static Analysis      │── blocked ──► error    │
+│  └──────────┬───────────┘                        │
+│             │ passed                             │
+│             ▼                                    │
+│  ┌──────────────────────┐                        │
+│  │ Docker Container     │  ← separate process    │
+│  │  - seccomp profile   │  ← syscall filter      │
+│  │  - memory limit      │  ← cgroup limit        │
+│  │  - CPU limit         │  ← cgroup limit        │
+│  │  - no network        │  ← network namespace   │
+│  │  - read-only FS      │  ← mount option        │
+│  │  - timeout           │  ← hard kill           │
+│  └──────────┬───────────┘                        │
+│             │ result                             │
+│             ▼                                    │
+│  Agent receives structured result                │
+└─────────────────────────────────────────────────┘
+```
+
+### Key Production Recommendations
+
+1. **Always use subprocess isolation** — `threading.Thread` timeouts are cooperative, not enforced
+2. **Use containers** (Docker, Firecracker, gVisor) for true sandboxing
+3. **Set resource limits** — memory (e.g., 256MB), CPU time (e.g., 10s), output size
+4. **Log everything** — every code execution should be auditable
+5. **Rate limit** — prevent DoS through rapid code execution requests
+6. **Content filtering** — scan output for sensitive data before returning to agent

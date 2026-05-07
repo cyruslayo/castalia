@@ -1,0 +1,29 @@
+stats = executor.get_stats()
+print("=" * 50)
+print("CODE EXECUTOR LIFETIME STATISTICS")
+print("=" * 50)
+for k, v in stats.items():
+    print(f"  {k}: {v}")
+
+# Analyze error types
+error_types = defaultdict(int)
+for entry in executor.history:
+    if not entry["result"]["success"]:
+        error = entry["result"].get("error", "unknown")
+        error_type = error.split(":")[0] if ":" in error else error[:30]
+        error_types[error_type] += 1
+
+if error_types:
+    print("\nError breakdown:")
+    for err_type, count in sorted(error_types.items(), key=lambda x: -x[1]):
+        print(f"  {err_type}: {count}")
+
+# Execution time distribution
+times = [h["result"].get("execution_time", 0) for h in executor.history if h["result"]["success"]]
+if times:
+    print(f"\nExecution times (successful runs):")
+    print(f"  Min: {min(times):.4f}s")
+    print(f"  Max: {max(times):.4f}s")
+    print(f"  Mean: {statistics.mean(times):.4f}s")
+    if len(times) > 1:
+        print(f"  Stdev: {statistics.stdev(times):.4f}s")

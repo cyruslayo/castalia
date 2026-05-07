@@ -1,0 +1,99 @@
+class CodeAgent:
+    """Agent that writes and executes Python code to solve problems."""
+
+    def __init__(self, executor: CodeExecutor, max_iterations: int = 5):
+        self.executor = executor
+        self.max_iterations = max_iterations
+
+    def _build_system_prompt(self) -> str:
+        return """You are a Python coding assistant. You solve problems by writing and executing Python code.
+
+WORKFLOW:
+1. Analyze the problem
+2. Write Python code to solve it
+3. I will execute your code and show you the output
+4. If there's an error, fix the code and try again
+
+RESPONSE FORMAT — always respond with this exact JSON:
+{"thought": "your analysis of what to do", "code": "python code to execute"}
+
+When you have the final answer after seeing code output:
+{"thought": "analysis of the results", "answer": "your final answer based on the code output"}
+
+RULES:
+- Always use print() to display results — that's how I capture output
+- Available modules: math, statistics, collections, itertools, json, re, datetime, string, random, functools, decimal, fractions
+- Do NOT use: os, sys, subprocess, open(), eval(), exec(), __import__
+- Write clean, readable code with comments
+- If you get an error, carefully read it and fix the specific issue"""
+
+    def run(self, query: str, verbose: bool = True) -> dict:
+        """Run the CodeAgent on a query."""
+        messages = [
+            {"role": "system", "content": self._build_system_prompt()},
+            {"role": "user", "content": f"Solve this problem using Python code:\n\n{query}"},
+        ]
+
+        iterations = []
+        for i in range(self.max_iterations):
+            response = generate(messages, max_new_tokens=600, temperature=0.3)
+
+            # Parse JSON response
+            try:
+                json_match = re.search(r'\{[\s\S]*\}', response)
+                if not json_match:
+                    iterations.append({"iteration": i, "type": "answer", "content": response})
+                    return {"answer": response, "iterations": iterations, "code_runs": i}
+                parsed = json.loads(json_match.group())
+            except json.JSONDecodeError:
+                iterations.append({"iteration": i, "type": "parse_error", "raw": response})
+                messages.append({"role": "assistant", "content": response})
+                messages.append({"role": "user", "content": "Your response was not valid JSON. Please respond with the exact format: {\"thought\": \"...\", \"code\": \"...\"} or {\"thought\": \"...\", \"answer\": \"...\"}"})
+                continue
+
+            thought = parsed.get("thought", "")
+
+            # If agent has the answer
+            if "answer" in parsed:
+                iterations.append({"iteration": i, "type": "answer", "thought": thought, "answer": parsed["answer"]})
+                if verbose:
+                    print(f"  [Iteration {i}] ANSWER: {parsed['answer'][:100]}...")
+                return {"answer": parsed["answer"], "iterations": iterations, "code_runs": len([it for it in iterations if it["type"] == "code"])}
+
+            # If agent wrote code
+            if "code" in parsed:
+                code_str = parsed["code"]
+                if verbose:
+                    print(f"  [Iteration {i}] Thought: {thought[:80]}...")
+                    print(f"  [Iteration {i}] Running code ({len(code_str)} chars)...")
+
+                result = self.executor.execute(code_str)
+                formatted = self.executor.format_result(result)
+                iterations.append({
+                    "iteration": i, "type": "code", "thought": thought,
+                    "code": code_str, "result": result, "formatted": formatted
+                })
+
+                if verbose:
+                    status = "✓" if result["success"] else "✗"
+                    output_preview = (result.get("stdout", "") or result.get("error", ""))[:80]
+                    print(f"  [Iteration {i}] {status} Output: {output_preview}")
+
+                # Feed result back
+                messages.append({"role": "assistant", "content": response})
+                if result["success"]:
+                    messages.append({"role": "user", "content": f"Code executed successfully.\nOutput:\n{result['stdout']}\n\nNow provide your final answer based on the output. Respond with: {{\"thought\": \"...\", \"answer\": \"...\"}}"})
+                else:
+                    messages.append({"role": "user", "content": f"Code execution failed:\n{formatted}\n\nPlease fix the code and try again."})
+            else:
+                iterations.append({"iteration": i, "type": "other", "raw": response})
+                messages.append({"role": "assistant", "content": response})
+                messages.append({"role": "user", "content": "Please provide either code to execute or a final answer."})
+
+        return {"answer": "Max iterations reached without solution", "iterations": iterations, "code_runs": len([it for it in iterations if it["type"] == "code"])}
+
+code_agent = CodeAgent(executor, max_iterations=5)
+print("✓ CodeAgent created")
+print(f"  Max iterations: {code_agent.max_iterations}")
+print(f"  Sandbox timeout: {executor.sandbox.timeout}s")
+print(f"  Allowed modules: {sorted(executor.sandbox.ALLOWED_IMPORTS)}")

@@ -1,0 +1,3 @@
+### 5.1 — Error Handling in Action
+
+Let's see how the CodeExecutor handles various error types — the error messages should help the agent fix the code.

@@ -1,0 +1,12 @@
+print("=" * 60)
+print("TASK 5: Statistical Analysis")
+print("=" * 60)
+result = code_agent.run(
+    "Generate two datasets using random seed 42: "
+    "Group A: 30 values from a normal distribution with mean=75, stdev=10. "
+    "Group B: 30 values from a normal distribution with mean=80, stdev=12. "
+    "Calculate for each group: mean, median, stdev, min, max. "
+    "Then compute the difference in means and the Cohen's d effect size."
+)
+print(f"\nFinal answer: {result['answer'][:400]}...")
+print(f"Code runs: {result['code_runs']}")

@@ -1,0 +1,58 @@
+# --- Google Colab Setup ---
+# Install dependencies (run once per session)
+!pip install -q transformers>=4.51.0 accelerate bitsandbytes torch
+
+import torch
+import time
+import json
+import re
+import math
+import inspect
+from dataclasses import dataclass, field
+from typing import List, Dict, Optional, Any, Callable, Tuple, Union, get_type_hints
+from collections import defaultdict
+from google.colab import drive
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+
+# Mount Google Drive for model caching (faster subsequent loads)
+drive.mount('/content/drive')
+CACHE_DIR = "/content/drive/MyDrive/models"
+
+# Load open-source model with 4-bit quantization (fits Colab T4 16GB GPU)
+MODEL_NAME = "Qwen/Qwen3-8B"
+
+quantization_config = BitsAndBytesConfig(
+    load_in_4bit=True,
+    bnb_4bit_compute_dtype=torch.bfloat16,
+    bnb_4bit_quant_type="nf4",
+)
+
+tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, cache_dir=CACHE_DIR)
+model = AutoModelForCausalLM.from_pretrained(
+    MODEL_NAME,
+    device_map="auto",
+    quantization_config=quantization_config,
+    cache_dir=CACHE_DIR,
+    torch_dtype="auto",
+)
+
+def generate(messages, max_new_tokens=512, temperature=0.7, do_sample=True):
+    """Generate a response from the model given a list of chat messages."""
+    text = tokenizer.apply_chat_template(
+        messages, tokenize=False, add_generation_prompt=True, enable_thinking=False
+    )
+    inputs = tokenizer([text], return_tensors="pt").to(model.device)
+    output_ids = model.generate(
+        **inputs,
+        max_new_tokens=max_new_tokens,
+        temperature=temperature if do_sample else None,
+        do_sample=do_sample,
+        top_k=20,
+    )
+    generated = output_ids[0][inputs.input_ids.shape[1]:]
+    return tokenizer.decode(generated, skip_special_tokens=True)
+
+print(f"✓ Model loaded: {MODEL_NAME}")
+print(f"  Parameters: {sum(p.numel() for p in model.parameters()):,}")
+print(f"  GPU memory used: {torch.cuda.memory_allocated() / 1024**3:.1f} GB")
+print(f"  Vocabulary size: {len(tokenizer):,} tokens")

@@ -1,0 +1,12 @@
+print("=" * 60)
+print("TASK 2: Data Analysis")
+print("=" * 60)
+result = code_agent.run(
+    "I have monthly sales data: "
+    "Jan=12500, Feb=13200, Mar=14800, Apr=13900, May=15600, Jun=16200, "
+    "Jul=15100, Aug=14700, Sep=16800, Oct=17200, Nov=18500, Dec=19100. "
+    "Calculate: 1) Total annual sales, 2) Monthly average, 3) Month with highest sales, "
+    "4) Month-over-month growth rates, 5) Which quarter performed best."
+)
+print(f"\nFinal answer: {result['answer'][:400]}...")
+print(f"Code runs: {result['code_runs']}")

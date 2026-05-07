@@ -1,0 +1,3 @@
+### 11.1 — Demonstrating Safe Patterns
+
+Even within our restrictions, the sandbox supports rich computation patterns.

@@ -1,0 +1,11 @@
+## 6. The CodeAgent — An Agent That Writes and Runs Code
+
+This is the culmination: an agent that uses ReAct-style reasoning to:
+1. Analyze the problem
+2. Write Python code to solve it
+3. Execute the code via our sandbox
+4. Inspect the output
+5. If there's an error, analyze it and write fixed code
+6. Repeat until successful
+
+This pattern is inspired by **PAL (Program-Aided Language Models)** — use the LLM for reasoning and code generation, but use the Python runtime for computation.

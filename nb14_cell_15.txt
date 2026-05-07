@@ -1,0 +1,6 @@
+## 5. The CodeExecutor Tool
+
+We wrap the sandbox in a tool class that provides a clean interface for the agent. This adds:
+- Pre-execution validation with detailed feedback
+- Result formatting that helps the LLM understand output
+- Execution history for debugging

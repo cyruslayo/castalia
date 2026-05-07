@@ -1,0 +1,13 @@
+print("=" * 60)
+print("REFINEMENT TEST 2: Multi-step Problem")
+print("=" * 60)
+print()
+
+result = code_agent.run(
+    "Implement a Caesar cipher with both encrypt and decrypt functions. "
+    "The cipher should handle uppercase and lowercase letters, and leave non-letter characters unchanged. "
+    "Test with: encrypt('Hello, World!', 13) and verify decrypt gives back the original. "
+    "Also show that double-encrypting with shift 13 (ROT13) returns the original text."
+)
+print(f"\nFinal answer: {result['answer'][:400]}...")
+print(f"Code runs: {result['code_runs']}")

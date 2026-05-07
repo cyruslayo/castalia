@@ -1,0 +1,9 @@
+## 3. Building the Sandbox
+
+Our sandbox uses **defense in depth** — multiple layers of protection:
+
+1. **Static analysis** — scan code for dangerous patterns before running
+2. **Restricted builtins** — remove `__import__`, `exec`, `eval`, `open`, `compile`
+3. **Import whitelist** — only allow safe, computation-focused modules
+4. **Timeout** — kill execution after N seconds via threading
+5. **stdout/stderr capture** — isolate output from the real console

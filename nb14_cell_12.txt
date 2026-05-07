@@ -1,0 +1,31 @@
+dangerous_tests = [
+    ("File access", "open('/etc/passwd').read()"),
+    ("OS module", "import os\nos.listdir('/')"),
+    ("Subprocess", "import subprocess\nsubprocess.run(['ls'])"),
+    ("Network access", "import urllib.request\nurllib.request.urlopen('http://evil.com')"),
+    ("Socket", "import socket\ns = socket.socket()"),
+    ("Direct __import__", "__import__('os').listdir('/')"),
+    ("eval bypass", "eval('1+1')"),
+    ("exec bypass", "exec('print(1)')"),
+    ("compile bypass", "compile('1+1', '', 'eval')"),
+    ("Globals access", "globals()"),
+    ("Sys access", "import sys\nsys.exit(1)"),
+]
+
+print("=" * 70)
+print(f"{'DANGEROUS CODE TESTS (all should be blocked)':^70}")
+print("=" * 70)
+blocked = 0
+for name, code_str in dangerous_tests:
+    result = sandbox.execute(code_str)
+    if not result["success"]:
+        blocked += 1
+        reason = result.get("error", "")[:50]
+        if result.get("issues"):
+            reason = result["issues"][0].get("detail", reason)[:50]
+        print(f"  ✓ BLOCKED: {name:<25} → {reason}")
+    else:
+        print(f"  ✗ ALLOWED: {name:<25} → THIS IS A SECURITY HOLE!")
+
+print(f"\nBlocked {blocked}/{len(dangerous_tests)} dangerous patterns ({blocked/len(dangerous_tests):.0%})")
+assert blocked == len(dangerous_tests), "Security breach detected!"
