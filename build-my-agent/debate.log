@@ -1,0 +1,42 @@
+2026-05-07 22:45:30,881 - DebateSystem - INFO - Starting Debate: Should AI models be open source?
+2026-05-07 22:48:02,789 - httpx - INFO - HTTP Request: POST https://layoayeni--hermes-openai-compatible-vllm-serve.modal.run/v1/chat/completions "HTTP/1.1 303 See Other"
+2026-05-07 22:48:54,611 - httpx - INFO - HTTP Request: GET https://layoayeni--hermes-openai-compatible-vllm-serve.modal.run/v1/chat/completions?__modal_function_call_id=fc-01KR26ECB2QEH19TNVSFTK8YS8 "HTTP/1.1 200 OK"
+2026-05-07 22:48:54,709 - DebateSystem - WARNING - Agent OpenSourceAdvocate Round 1 Attempt 0 failed: Detected placeholder: '2-3 sentences'
+2026-05-07 22:49:02,412 - httpx - INFO - HTTP Request: POST https://layoayeni--hermes-openai-compatible-vllm-serve.modal.run/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-07 22:49:02,486 - DebateSystem - WARNING - Agent OpenSourceAdvocate Round 1 Attempt 1 failed: Detected placeholder: '2-3 sentences'
+2026-05-07 22:49:10,106 - httpx - INFO - HTTP Request: POST https://layoayeni--hermes-openai-compatible-vllm-serve.modal.run/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-07 22:49:10,219 - DebateSystem - WARNING - Agent OpenSourceAdvocate Round 1 Attempt 2 failed: Claim too short.
+2026-05-07 22:49:17,835 - httpx - INFO - HTTP Request: POST https://layoayeni--hermes-openai-compatible-vllm-serve.modal.run/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-07 22:49:17,937 - DebateSystem - WARNING - Agent SafetySkeptic Round 1 Attempt 0 failed: Detected placeholder: '2-3 sentences'
+2026-05-07 22:49:25,733 - httpx - INFO - HTTP Request: POST https://layoayeni--hermes-openai-compatible-vllm-serve.modal.run/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-07 22:49:25,834 - DebateSystem - WARNING - Agent SafetySkeptic Round 1 Attempt 1 failed: Detected placeholder: '2-3 sentences'
+2026-05-07 22:49:33,569 - httpx - INFO - HTTP Request: POST https://layoayeni--hermes-openai-compatible-vllm-serve.modal.run/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-07 22:49:33,656 - DebateSystem - WARNING - Agent SafetySkeptic Round 1 Attempt 2 failed: Detected placeholder: '2-3 sentences'
+2026-05-07 22:49:41,311 - httpx - INFO - HTTP Request: POST https://layoayeni--hermes-openai-compatible-vllm-serve.modal.run/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-07 22:49:41,424 - DebateSystem - WARNING - Agent OpenSourceAdvocate Round 2 Attempt 0 failed: Detected placeholder: '2-3 sentences'
+2026-05-07 22:49:49,078 - httpx - INFO - HTTP Request: POST https://layoayeni--hermes-openai-compatible-vllm-serve.modal.run/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-07 22:49:49,172 - DebateSystem - WARNING - Agent OpenSourceAdvocate Round 2 Attempt 1 failed: Detected placeholder: '2-3 sentences'
+2026-05-07 22:49:56,930 - httpx - INFO - HTTP Request: POST https://layoayeni--hermes-openai-compatible-vllm-serve.modal.run/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-07 22:49:57,055 - DebateSystem - WARNING - Agent OpenSourceAdvocate Round 2 Attempt 2 failed: Detected placeholder: '2-3 sentences'
+2026-05-07 22:50:04,810 - httpx - INFO - HTTP Request: POST https://layoayeni--hermes-openai-compatible-vllm-serve.modal.run/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-07 22:50:04,919 - DebateSystem - WARNING - Agent SafetySkeptic Round 2 Attempt 0 failed: Detected placeholder: '2-3 sentences'
+2026-05-07 22:50:12,673 - httpx - INFO - HTTP Request: POST https://layoayeni--hermes-openai-compatible-vllm-serve.modal.run/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-07 22:50:12,675 - DebateSystem - WARNING - Agent SafetySkeptic Round 2 Attempt 1 failed: Claim too short.
+2026-05-07 22:50:20,524 - httpx - INFO - HTTP Request: POST https://layoayeni--hermes-openai-compatible-vllm-serve.modal.run/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-07 22:50:20,775 - DebateSystem - WARNING - Agent SafetySkeptic Round 2 Attempt 2 failed: Detected placeholder: '2-3 sentences'
+2026-05-07 23:37:37,710 - DebateSystem - INFO - Starting Debate: Should AI models be open source?
+2026-05-07 23:39:53,884 - httpx - INFO - HTTP Request: POST https://layoayeni--hermes-openai-compatible-vllm-serve.modal.run/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-07 23:39:54,471 - DebateSystem - INFO - Agent OpenSourceAdvocate Round 1 Success: **
+   - Open-sourcing AI models is essential for e...
+2026-05-07 23:40:02,240 - httpx - INFO - HTTP Request: POST https://layoayeni--hermes-openai-compatible-vllm-serve.modal.run/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-07 23:40:02,273 - DebateSystem - WARNING - Agent SafetySkeptic Round 1 Attempt 0 failed: Claim too short.
+2026-05-07 23:40:09,646 - httpx - INFO - HTTP Request: POST https://layoayeni--hermes-openai-compatible-vllm-serve.modal.run/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-07 23:40:09,669 - DebateSystem - INFO - Agent SafetySkeptic Round 1 Success: **
+   - Needs to be substantial, directly addressi...
+2026-05-07 23:40:17,066 - httpx - INFO - HTTP Request: POST https://layoayeni--hermes-openai-compatible-vllm-serve.modal.run/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-07 23:40:17,074 - DebateSystem - INFO - Agent OpenSourceAdvocate Round 2 Success: **
+   Open-sourcing AI models is essential for acc...
+2026-05-07 23:40:24,424 - httpx - INFO - HTTP Request: POST https://layoayeni--hermes-openai-compatible-vllm-serve.modal.run/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-07 23:40:24,435 - DebateSystem - INFO - Agent SafetySkeptic Round 2 Success: * Fully open-sourcing advanced AI models significa...
+2026-05-07 23:40:42,203 - httpx - INFO - HTTP Request: POST https://layoayeni--hermes-openai-compatible-vllm-serve.modal.run/v1/chat/completions "HTTP/1.1 200 OK"
+2026-05-07 23:40:42,221 - DebateSystem - INFO - Debate Finished. Winner: Unknown

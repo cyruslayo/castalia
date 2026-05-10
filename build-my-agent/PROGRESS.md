@@ -45,11 +45,12 @@
 
 | # | Notebook | Core Concepts | Custom Build Status |
 |---|----------|---------------|---------------------|
-| **17** | **`multi_agent_conversation`** | **Specialization, verification, natural roles, debate. Message (sender, recipient, content, timestamp, metadata). ConversableAgent (personality, own history, response generation). TwoAgentChat (turn-taking, termination). Experiments: Researcher+Skeptic, Teacher+Student.** | ⬜ Future |
-| **18** | **`agent_debate_and_consensus`** | **Debate pattern (Du et al. 2023). Diverse initial answers, structured arguments, DebaterAgent, JudgeAgent, DebateArena (multi-round, voting, final decision).** | ⬜ Future |
-| **19** | **`sequential_agent_pipelines`** | **Unix pipes analogy. Specialized stages outperform generalists. Message dataclass, AgentNode, Pipeline (chain N agents, logging, error, partial execution). Research pipeline example.** | ⬜ Future |
-| **20** | **`hierarchical_agent_delegation`** | **Manager-worker (Park et al. 2023). Decompose-Delegate-Aggregate. WorkerAgent, WorkerRegistry. Manager decomposes, delegates, aggregates. Flat vs hierarchical.** | ⬜ Future |
-| **21** | **`agent_orchestration_patterns`** | **Routing and control flow. Router Agent, conditional routing, parallel fan-out/fan-in, DAG-based (topological sort).** | ⬜ Future |
+| **17** | **`multi_agent_conversation`** | **Specialization, verification, natural roles, debate. Message (sender, recipient, content, timestamp, metadata). ConversableAgent (personality, own history, response generation). TwoAgentChat (turn-taking, termination). Experiments: Researcher+Skeptic, Teacher+Student.** | ✅ Built: multi_agent_conversation.py |
+| **18** | **`agent_debate_and_consensus`** | **Debate pattern (Du et al. 2023). Diverse initial answers, structured arguments, DebaterAgent, JudgeAgent, DebateArena (multi-round, voting, final decision).** | ✅ Built: multi_agent_debate.py |
+| 19 | `sequential_agent_pipelines` | **Unix pipes analogy. Specialized stages outperform generalists. Message dataclass, AgentNode, Pipeline (chain N agents, logging, error, partial execution). Research pipeline example.** | ✅ Built: sequential_pipelines.py, sequential_walkthrough.py |
+| 20 | `hierarchical_agent_delegation` | **Manager-worker (Park et al. 2023). Decompose-Delegate-Aggregate. WorkerAgent, WorkerRegistry. Manager decomposes, delegates, aggregates. Flat vs hierarchical.** | ✅ Built: hierarchical_delegation.py |
+
+| **21** | **`agent_orchestration_patterns`** | **Routing and control flow. Router Agent, conditional routing, parallel fan-out/fan-in, DAG-based (topological sort).** | ✅ Done |
 | **22** | **`shared_state_and_blackboard`** | **Shared workspace, knowledge sources, controller. Advantages over message-passing. Blackboard class, BlackboardAgent, event-driven, conflict resolution.** | ⬜ Future |
 | **23** | **`swarm_intelligence`** | **Emergent behavior from simple agents. Decentralization, local interaction, stigmergy, emergence. SimpleSwarmAgent, SwarmCoordinator, diversity analysis.** | ⬜ Future |
 
