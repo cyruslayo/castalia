@@ -16,13 +16,18 @@ import re
 import time
 from typing import List, Dict, Any, Optional
 
-from config import client, get_model
+from config import get_client, get_model
 from tool_registry import ToolRegistry, build_production_registry
 from tool_definitions import ToolDefinition
 
 # ============================================================================
 # AdvancedToolAgent
 # ============================================================================
+
+def _safe_printable(value: Any) -> str:
+    """Return console-safe text for Windows terminals with limited encodings."""
+    return str(value).encode("ascii", errors="replace").decode("ascii")
+
 
 class AdvancedToolAgent:
     """Agent that uses the full tool registry with ReAct-style reasoning.
@@ -36,9 +41,15 @@ class AdvancedToolAgent:
       6. Repeat until max_steps or answer found
     """
 
-    def __init__(self, registry: ToolRegistry, max_steps: int = 8):
-        self.registry = registry
+    def __init__(self, tool_backend, max_steps: int = 8, event_bus=None,
+                 request_id: str | None = None, actor: str = "agent", optimizer=None):
+        self.tool_backend = tool_backend
+        self.registry = getattr(tool_backend, "registry", tool_backend)
         self.max_steps = max_steps
+        self.event_bus = event_bus
+        self.request_id = request_id
+        self.actor = actor
+        self.optimizer = optimizer
 
     def _build_system_prompt(self) -> str:
         """Build system prompt with full tool registry descriptions."""
@@ -95,30 +106,78 @@ Rules:
             dict with 'answer', 'steps', 'tool_calls', 'total_time'
         """
         start_time = time.time()
+        if self.event_bus:
+            self.event_bus.emit(
+                "agent.run.started",
+                self.actor,
+                {"query": query, "max_steps": self.max_steps},
+                request_id=self.request_id,
+            )
         messages = [
             {"role": "system", "content": self._build_system_prompt()},
             {"role": "user", "content": query},
         ]
         steps = []
         tool_calls = 0
+        generation_params = (
+            self.optimizer.route_for_query(query)
+            if self.optimizer is not None else
+            {"temperature": 0.3, "max_new_tokens": 1024, "do_sample": True}
+        )
+
+        if self.optimizer is not None:
+            self.optimizer.reset_run()
 
         if verbose:
             print(f"\n{'=' * 60}")
-            print(f"QUERY: {query}")
+            print(_safe_printable(f"QUERY: {query}"))
             print(f"{'=' * 60}")
 
         for step_num in range(self.max_steps):
+            effective_messages = messages
+            if self.optimizer is not None:
+                effective_messages, budget_check = self.optimizer.prepare_messages(messages)
+                if not budget_check.get("ok", True):
+                    return {
+                        "answer": f"Budget exceeded before step {step_num + 1}.",
+                        "steps": steps,
+                        "tool_calls": tool_calls,
+                        "total_time": time.time() - start_time,
+                        "input_tokens": self.optimizer.budget.total_input_tokens,
+                        "output_tokens": self.optimizer.budget.total_output_tokens,
+                        "total_tokens": self.optimizer.budget.total_tokens,
+                        "optimization": self.optimizer.stats(),
+                    }
+
             # Call LLM
             try:
-                response = client.chat.completions.create(
-                    model=get_model(),
-                    messages=messages,
-                    temperature=0.3,
-                    max_tokens=1024,
-                    extra_body={'chat_template_kwargs': {'enable_thinking': False}},
-                )
-                msg = response.choices[0].message
-                response_text = msg.content or ""
+                def _llm_call(payload, **kwargs):
+                    response = get_client().chat.completions.create(
+                        model=get_model(),
+                        messages=payload["messages"],
+                        temperature=kwargs.get("temperature", 0.3),
+                        max_tokens=kwargs.get("max_new_tokens", 1024),
+                        extra_body={'chat_template_kwargs': {'enable_thinking': False}},
+                    )
+                    msg = response.choices[0].message
+                    return msg.content or getattr(msg, 'reasoning', '') or ""
+
+                if self.optimizer is not None:
+                    response_text, was_cached = self.optimizer.cached_generate(
+                        "advanced_tool_agent",
+                        {"messages": effective_messages},
+                        _llm_call,
+                        **generation_params,
+                    )
+                    self.optimizer.record_generation(
+                        effective_messages,
+                        response_text,
+                        label=f"step-{step_num + 1}",
+                        cached=was_cached,
+                    )
+                else:
+                    response_text = _llm_call({"messages": effective_messages}, **generation_params)
+                    was_cached = False
             except Exception as e:
                 if verbose:
                     print(f"\n  LLM Error: {e}")
@@ -136,39 +195,86 @@ Rules:
 
             # Parse JSON response
             parsed = self._extract_json(response_text)
+            if self.event_bus:
+                self.event_bus.emit(
+                    "agent.step.parsed",
+                    self.actor,
+                    {
+                        "step": step_num,
+                        "parsed": parsed,
+                        "raw_response": response_text[:500],
+                        "cached": was_cached,
+                        "generation_params": generation_params,
+                    },
+                    request_id=self.request_id,
+                )
+
+            if self.optimizer is not None and self.optimizer.detect_circularity(response_text[:200]):
+                return {
+                    "answer": "Circular reasoning detected — stopping early.",
+                    "steps": steps,
+                    "tool_calls": tool_calls,
+                    "total_time": time.time() - start_time,
+                    "input_tokens": self.optimizer.budget.total_input_tokens,
+                    "output_tokens": self.optimizer.budget.total_output_tokens,
+                    "total_tokens": self.optimizer.budget.total_tokens,
+                    "optimization": self.optimizer.stats(),
+                }
 
             if parsed is None:
                 # LLM didn't produce JSON — treat as direct answer
                 if verbose:
                     print(f"\n  Step {step_num}: [Direct Answer]")
-                    print(f"    {response_text[:200]}...")
+                    print(_safe_printable(f"    {response_text[:200]}..."))
                 steps.append({
                     "step": step_num,
                     "type": "answer",
                     "content": response_text,
                 })
+                if self.event_bus:
+                    self.event_bus.emit(
+                        "agent.answer.generated",
+                        self.actor,
+                        {"step": step_num, "answer": response_text, "direct": True},
+                        request_id=self.request_id,
+                    )
                 return {
                     "answer": response_text,
                     "steps": steps,
                     "tool_calls": tool_calls,
                     "total_time": time.time() - start_time,
+                    "input_tokens": self.optimizer.budget.total_input_tokens if self.optimizer is not None else 0,
+                    "output_tokens": self.optimizer.budget.total_output_tokens if self.optimizer is not None else 0,
+                    "total_tokens": self.optimizer.budget.total_tokens if self.optimizer is not None else 0,
+                    "optimization": self.optimizer.stats() if self.optimizer is not None else {},
                 }
 
             # Check for answer
             if "answer" in parsed:
                 if verbose:
                     print(f"\n  Step {step_num}: [Answer]")
-                    print(f"    {parsed['answer']}")
+                    print(_safe_printable(f"    {parsed['answer']}"))
                 steps.append({
                     "step": step_num,
                     "type": "answer",
                     "content": parsed["answer"],
                 })
+                if self.event_bus:
+                    self.event_bus.emit(
+                        "agent.answer.generated",
+                        self.actor,
+                        {"step": step_num, "answer": parsed["answer"], "direct": False},
+                        request_id=self.request_id,
+                    )
                 return {
                     "answer": parsed["answer"],
                     "steps": steps,
                     "tool_calls": tool_calls,
                     "total_time": time.time() - start_time,
+                    "input_tokens": self.optimizer.budget.total_input_tokens if self.optimizer is not None else 0,
+                    "output_tokens": self.optimizer.budget.total_output_tokens if self.optimizer is not None else 0,
+                    "total_tokens": self.optimizer.budget.total_tokens if self.optimizer is not None else 0,
+                    "optimization": self.optimizer.stats() if self.optimizer is not None else {},
                 }
 
             # Check for tool call
@@ -178,17 +284,27 @@ Rules:
                 thought = parsed.get("thought", "")
 
                 if verbose:
-                    print(f"\n  Step {step_num}: [Tool Call: {tool_name}]")
-                    print(f"    Thought: {thought}")
-                    print(f"    Args: {tool_args}")
+                    print(_safe_printable(f"\n  Step {step_num}: [Tool Call: {tool_name}]"))
+                    print(_safe_printable(f"    Thought: {thought}"))
+                    print(_safe_printable(f"    Args: {tool_args}"))
+                if self.event_bus:
+                    self.event_bus.emit(
+                        "agent.tool.selected",
+                        self.actor,
+                        {"step": step_num, "tool": tool_name, "args": tool_args, "thought": thought},
+                        request_id=self.request_id,
+                    )
 
-                # Execute tool via registry
-                tool_result = self.registry.call(tool_name, **tool_args)
+                # Execute tool via tool runtime/registry backend
+                if hasattr(self.tool_backend, "call") and hasattr(self.tool_backend, "registry"):
+                    tool_result = self.tool_backend.call(tool_name, tool_args)
+                else:
+                    tool_result = self.registry.call(tool_name, **tool_args)
                 tool_calls += 1
 
                 if verbose:
                     status = "OK" if tool_result.success else "ERROR"
-                    print(f"    Result: [{status}] {tool_result.to_dict()}")
+                    print(_safe_printable(f"    Result: [{status}] {tool_result.to_dict()}"))
 
                 steps.append({
                     "step": step_num,
@@ -208,27 +324,49 @@ Rules:
             else:
                 # No recognizable action
                 if verbose:
-                    print(f"\n  Step {step_num}: [Unknown Response]")
+                    print(_safe_printable(f"\n  Step {step_num}: [Unknown Response]"))
                 steps.append({
                     "step": step_num,
                     "type": "unknown",
                     "content": response_text,
                 })
+                if self.event_bus:
+                    self.event_bus.emit(
+                        "agent.answer.generated",
+                        self.actor,
+                        {"step": step_num, "answer": response_text, "unknown": True},
+                        request_id=self.request_id,
+                    )
                 return {
                     "answer": response_text,
                     "steps": steps,
                     "tool_calls": tool_calls,
                     "total_time": time.time() - start_time,
+                    "input_tokens": self.optimizer.budget.total_input_tokens if self.optimizer is not None else 0,
+                    "output_tokens": self.optimizer.budget.total_output_tokens if self.optimizer is not None else 0,
+                    "total_tokens": self.optimizer.budget.total_tokens if self.optimizer is not None else 0,
+                    "optimization": self.optimizer.stats() if self.optimizer is not None else {},
                 }
 
         # Max steps reached
         if verbose:
             print(f"\n  [Max Steps Reached: {self.max_steps}]")
+        if self.event_bus:
+            self.event_bus.emit(
+                "agent.run.max_steps",
+                self.actor,
+                {"max_steps": self.max_steps, "query": query},
+                request_id=self.request_id,
+            )
         return {
             "answer": f"Max steps ({self.max_steps}) reached without final answer.",
             "steps": steps,
             "tool_calls": tool_calls,
             "total_time": time.time() - start_time,
+            "input_tokens": self.optimizer.budget.total_input_tokens if self.optimizer is not None else 0,
+            "output_tokens": self.optimizer.budget.total_output_tokens if self.optimizer is not None else 0,
+            "total_tokens": self.optimizer.budget.total_tokens if self.optimizer is not None else 0,
+            "optimization": self.optimizer.stats() if self.optimizer is not None else {},
         }
 
 

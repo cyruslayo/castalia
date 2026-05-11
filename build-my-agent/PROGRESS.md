@@ -5,6 +5,8 @@
 > **Current Level:** 0 (Complete beginner, heavy scaffolding required)
 > **API:** OpenAI-compatible vLLM endpoint (hermes-model)
 > **Working Directory:** `C:/AI2026/castalia/build-my-agent/`
+>
+> **Runtime Wiring Update (2026-05-10):** Added integrated runtime trunk: `runtime_contracts.py`, `agent_runtime.py`, `agent_loop_v2.py`, `tool_runtime.py`, `registry_bootstrap.py`, `agent_adapters.py`, `strategy_router.py`, `memory_hub.py`, `event_bus.py`, `blackboard_runtime.py`, `approval_runtime.py`, `evaluation_runtime.py`, `optimization_runtime.py`, `resilience.py`, `protocol_runtime.py`, `lifecycle_runtime.py`, and `capstone_runtime.py`. This wires existing notebooks behind shared contracts and prepares Notebooks 25-37 to build on one system.
 
 ---
 
@@ -51,26 +53,26 @@
 | 20 | `hierarchical_agent_delegation` | **Manager-worker (Park et al. 2023). Decompose-Delegate-Aggregate. WorkerAgent, WorkerRegistry. Manager decomposes, delegates, aggregates. Flat vs hierarchical.** | ✅ Built: hierarchical_delegation.py |
 
 | **21** | **`agent_orchestration_patterns`** | **Routing and control flow. Router Agent, conditional routing, parallel fan-out/fan-in, DAG-based (topological sort).** | ✅ Done |
-| **22** | **`shared_state_and_blackboard`** | **Shared workspace, knowledge sources, controller. Advantages over message-passing. Blackboard class, BlackboardAgent, event-driven, conflict resolution.** | ⬜ Future |
-| **23** | **`swarm_intelligence`** | **Emergent behavior from simple agents. Decentralization, local interaction, stigmergy, emergence. SimpleSwarmAgent, SwarmCoordinator, diversity analysis.** | ⬜ Future |
+| **22** | **`shared_state_and_blackboard`** | **Shared workspace, knowledge sources, controller. Advantages over message-passing. Blackboard class, BlackboardAgent, event-driven, conflict resolution.** | ✅ Built: blackboard_architecture.py + blackboard_runtime.py + test_blackboard.py |
+| **23** | **`swarm_intelligence`** | **Emergent behavior from simple agents. Decentralization, local interaction, stigmergy, emergence. SimpleSwarmAgent, SwarmCoordinator, diversity analysis.** | ✅ Built: swarm_intelligence.py (offline deterministic mode by default, opt-in LLM mode via SWARM_USE_LLM, test_swarm.py now passes) |
 
 ### Module 5: Production Concerns (Notebooks 24–28)
 
 | # | Notebook | Core Concepts | Custom Build Status |
 |---|----------|---------------|---------------------|
-| **24** | **`agent_safety_and_guardrails`** | **Prompt injection, PII detection, tool validation (whitelist, bounds, types), rate limiting, audit logging.** | ⬜ Future |
-| **25** | **`human_in_the_loop`** | **Approval gates, feedback loops, escalation, interactive mode, human intervenes at any step.** | ⬜ Future |
-| **26** | **`agent_evaluation_and_testing`** | **Non-deterministic, multi-step, subjective. Metrics, golden dataset (15+ tasks), automated scoring, LLM-as-judge, regression testing.** | ⬜ Future |
-| **27** | **`cost_and_latency_optimization`** | **Token budget, caching, prompt compression, model routing, circularity detection, early termination.** | ⬜ Future |
-| **28** | **`error_handling_and_resilience`** | **RetryWithFeedback, FallbackChain, CircuitBreaker (CLOSED→OPEN→HALF_OPEN), GracefulDegradation, timeout.** | ⬜ Future |
+| **24** | **`agent_safety_and_guardrails`** | **Prompt injection, PII detection, tool validation (whitelist, bounds, types), rate limiting, audit logging.** | ✅ Built: agent_safety.py + test_safety_guardrails.py |
+| **25** | **`human_in_the_loop`** | **Approval gates, feedback loops, escalation, interactive mode, human intervenes at any step.** | ✅ Built: approval_runtime.py + ToolRuntime/AgentRuntime integration + live_test_hitl_runtime.py + test_approval_runtime.py |
+| **26** | **`agent_evaluation_and_testing`** | **Non-deterministic, multi-step, subjective. Metrics, golden dataset (15+ tasks), automated scoring, LLM-as-judge, regression testing.** | ✅ Built: evaluation_runtime.py + test_evaluation_runtime.py + AgentRuntime.evaluate_dataset() |
+| **27** | **`cost_and_latency_optimization`** | **Token budget, caching, prompt compression, model routing, circularity detection, early termination.** | ✅ Built: optimization_runtime.py + test_optimization_runtime.py + RuntimeOptimizer wired into default runtime |
+| **28** | **`error_handling_and_resilience`** | **RetryWithFeedback, FallbackChain, CircuitBreaker (CLOSED→OPEN→HALF_OPEN), GracefulDegradation, timeout.** | ✅ Built: resilience.py + test_resilience.py + SafeToolExecutor |
 
 ### Module 6: Communication Protocols (Notebooks 29–31)
 
 | # | Notebook | Core Concepts | Custom Build Status |
 |---|----------|---------------|---------------------|
-| **29** | **`mcp_from_scratch`** | **Model Context Protocol (Anthropic 2024). Host/Client/Server roles, JSON-RPC, MCP server, MCP client, handshake, calculator example.** | ⬜ Future |
-| **30** | **`a2a_protocol`** | **Agent-to-Agent (Google 2025). Agent Card (identity/capabilities/endpoint/auth), Agent Directory, Task Protocol, 3-agent collaboration.** | ⬜ Future |
-| **31** | **`building_an_agent_runtime`** | **Infrastructure: no visibility, no coordination, no recovery, no management. EventBus (pub-sub), AgentLogger (structured, traces, JSON), AgentRegistry, AgentLifecycle (start/stop/restart/health check), complete runtime.** | ⬜ Future |
+| **29** | **`mcp_from_scratch`** | **Model Context Protocol (Anthropic 2024). Host/Client/Server roles, JSON-RPC, MCP server, MCP client, handshake, calculator example.** | ✅ Built: `protocol_runtime.py` + `test_protocol_runtime.py` + first-class `mcp` AgentRuntime strategy with auto-discovery from configured MCP servers |
+| **30** | **`a2a_protocol`** | **Agent-to-Agent (Google 2025). Agent Card (identity/capabilities/endpoint/auth), Agent Directory, Task Protocol, 3-agent collaboration.** | ✅ Built: `protocol_runtime.py` (`AgentCard`, `AgentDirectory`, `TaskRequest`/`TaskResponse`/`TaskRecord`, `A2AAgent`, `CoordinatorAgent`) + expanded `test_protocol_runtime.py` |
+| **31** | **`building_an_agent_runtime`** | **Infrastructure: no visibility, no coordination, no recovery, no management. EventBus (pub-sub), AgentLogger (structured, traces, JSON), AgentRegistry, AgentLifecycle (start/stop/restart/health check), complete runtime.** | ✅ Built: `event_bus.py`, `lifecycle_runtime.py`, `agent_runtime.py`, `test_lifecycle_runtime.py` |
 
 ### Module 7: Capstone — Castalia Scholar (Notebooks 32–37)
 
@@ -465,6 +467,19 @@ All files live in `C:/AI2026/castalia/build-my-agent/`
 - **Live LLM test**: Successfully executed on warm Modal endpoint (Hermes/vLLM reasoning model). 84.9s total: planning (55s reasoning + JSON output), execution (instant), synthesis (30s). 3-step plan produced, zero anomalies, 1,129-char substantive answer
 - **Endpoint-aware**: gracefully degrades to deterministic output when LLM is unreachable
 
+### Agent Evaluation & Testing (Notebook 26)
+
+#### evaluation_runtime.py (~700 lines)
+- `GoldenTask`, `EvalMetrics`, and backward-compatible `EvalResult` dataclasses for curated tasks, full-fidelity scoring, and simple pass/fail summaries
+- Scoring helpers: `normalize_answer()`, exact match, fuzzy keyword overlap, tool-accuracy F1, expected/forbidden substring checks, and pluggable judge scoring with deterministic fallback
+- `build_default_golden_dataset()` ships a 15-task suite adapted to the integrated registry (`calculator`, `search_kb`) across math, factual, reasoning, lookup, and multi-step categories
+- `AgentEvaluator` runs `AgentRuntime`/adapter-compatible runtimes through a suite, captures answer/tool/latency/token/step metadata, and aggregates reports by category and difficulty
+- `CostTracker` estimates token cost and latency; `RegressionTracker` saves in-memory or JSON baselines and compares later runs; `RegressionRunner` preserves the original scaffold’s simple API
+
+#### test_evaluation_runtime.py (~150 lines)
+- 8 deterministic tests cover normalization, scorer behavior, default dataset coverage, suite aggregation, cost summaries, baseline save/load + regression detection, and `RegressionRunner` compatibility
+- Verified together with existing HITL runtime tests: **18/18 combined tests pass**
+
 ### Diagnostic & Documentation
 
 - `config.py` (967 bytes): LLM_CONFIG dict, singleton OpenAI client, get_model() helper, vLLM endpoint
@@ -474,11 +489,25 @@ All files live in `C:/AI2026/castalia/build-my-agent/`
 - `debug_basic.py`, `debug_critic.py`, `debug_critic2.py`: diagnostic scripts for isolating None LLM responses
 - `REACT_SUMMARY.md` (2836 bytes), `PLAN_AND_EXECUTE_SUMMARY.md` (4060 bytes), `COMPARISON.md` (6752 bytes), `REFLECTION_WALKTHROUGH.md` (10548 bytes): architecture documentation
 
+### Error Handling & Resilience (Notebook 28)
+
+#### resilience.py (~450 lines)
+- `RetryWithFeedback`: supports both notebook-style `(result, success)` retries with error messages appended to conversation state and generic exception-based retries via `.run()`
+- `FallbackChain`: accepts named strategy dicts or bare callables, records per-strategy execution outcomes, returns first success, and preserves a strict all-failed path
+- `CircuitBreaker`: full CLOSED → OPEN → HALF_OPEN state machine with cooldown, probe recovery, transition history, blocked-call tracking, and backward-compatible `.call()`/`.execute()` APIs
+- `GracefulDegradation`: accumulates partial results and failed steps, computes completion rate, and returns complete/partial/failed summaries
+- `TimeoutError`, `call_with_timeout()`, `with_timeout()`: cross-platform timeout protection that works on Windows as well as Unix environments
+- `SafeToolExecutor`: composes timeout + retry + per-tool circuit breaker into one tool wrapper for agent/tool execution paths
+
+#### test_resilience.py (~120 lines)
+- 9 deterministic tests cover retry feedback loops, fallback sequencing, circuit-breaker trip/recovery, graceful degradation summaries, timeout enforcement, decorator behavior, and SafeToolExecutor retry/circuit behavior
+- Verified together with runtime integration/evaluation/optimization/HITL tests: **36/36 combined tests pass**
+
 ---
 
 ## Part 3: Where We Are — The Current State
 
-### ✅ COMPLETED (15 of 37 notebooks fully covered)
+### ✅ COMPLETED (29 of 37 notebooks fully covered)
 
 | Notebook | Custom Build Equivalent | Validation |
 |----------|------------------------|------------|
@@ -497,17 +526,28 @@ All files live in `C:/AI2026/castalia/build-my-agent/`
 | **13 - Advanced Tool Design** | **tool_registry.py (ToolRegistry, ToolResult, validate_with_helpful_errors, ToolTestHarness, StatefulKeyValueStore, ConfirmationTool, composed tools) + production_tools.py (10 tools: calculator, string_utils, list_ops, dict_ops, date_time, text_stats, format_converter, data_validator, math_advanced, encoding_tools) + agent_tool_integration.py (AdvancedToolAgent) + test_production_llm.py (real LLM integration tests)** | **24/24 unit tests pass, 13/13 registry tests pass, 10/10 production tool LLM tests pass, 3/3 base agent demos pass** |
 | **14 - Code Execution Tool** | **static_analyzer.py + output_sanitizer.py + audit_logger.py + code_sandbox.py (SubprocessSandbox hard-kill + production DockerSandbox with cgroups, cap-drop, read-only, tmpfs, PID limits, monitoring) + code_executor.py + code_agent.py + sandbox.Dockerfile + seccomp-profile.json + docker-compose.sandbox.yml + build_sandbox.ps1 + sandbox_monitor.py + test_sandbox_security.py** | **52/52 tests pass (7+7+5+7+8+18 security), DockerSandbox FULLY VERIFIED with live container execution: network blocked, read-only enforced, OOM kills 300MB, fork bomb blocked, non-root user confirmed** |
 | **15 - Web and Search Tools** | **web_search_tools.py (Tavily API client, dataclasses, registry integration, compact output) + tavily_research_agent.py (direct search→synthesize) + demo_tavily_agent.py (ReAct with tuned prompt, multi-object JSON scanner, context overflow fix) + multi_query_tavily_agent.py (LLM query reformulation, URL deduplication) + notebook15_corpus.py (30-doc local corpus) + local_search.py (pure-Python TF-IDF from scratch) + semantic_local_search.py (fastembed BGE + FAISS, auto-fallback) + hybrid_search.py (3-source fusion: web 0.4 + TF-IDF 0.2 + semantic 0.4)** | **Tavily: smoke test + live search (5 results, ~5s, 0.65-0.95 relevance); ReAct demo: 1 search → immediate synthesis (prevents infinite loop); Multi-query: 3 reformulations → merged top result 0.999; Hybrid: conceptual paraphrase query shows TF-IDF limited to keywords, BGE semantic surfaces transformer architecture doc, web fills current gaps** |
+| **16 - File and Data Tools** | **schema_aware_fs.py + unified_data_tools.py + self_correcting_data_agent.py + demo_data_agent.py** | **10/10 deterministic tool tests pass; 5/5 evaluation cases pass; live LLM data-agent run completed successfully** |
+| **17 - Multi-Agent Conversation** | **multi_agent_conversation.py** | **Implemented and archived in custom build** |
+| **18 - Agent Debate and Consensus** | **multi_agent_debate.py** | **Implemented and archived in custom build** |
+| **19 - Sequential Agent Pipelines** | **sequential_pipelines.py + sequential_walkthrough.py** | **Implemented and archived in custom build** |
+| **20 - Hierarchical Agent Delegation** | **hierarchical_delegation.py** | **Implemented and archived in custom build** |
+| **21 - Agent Orchestration Patterns** | **orchestration_patterns.py + test_orchestration.py** | **Orchestration test suite implemented** |
+| **22 - Shared State and Blackboard** | **blackboard_architecture.py + blackboard_runtime.py + test_blackboard.py** | **Blackboard, event-driven activation, and conflict-resolution tests implemented** |
+| **23 - Swarm Intelligence** | **swarm_intelligence.py + test_swarm.py** | **Offline deterministic mode passes; opt-in LLM mode supported** |
+| **24 - Agent Safety & Guardrails** | **agent_safety.py (InputValidator, ToolPolicy, ToolValidator, OutputFilter, SafetyAuditLogger, GuardrailsLayer, MakerCheckerPipeline) + test_safety_guardrails.py** | **6/6 deterministic safety tests pass: injection blocking, whitelist + bounds + approval checks, PII redaction, request rate limiting, maker-checker retry** |
+| **25 - Human in the Loop** | **approval_runtime.py (ApprovalStore, HumanInTheLoopController, feedback revision helper, escalation tuning) + tool_runtime.py (approval gating + request context + approval events) + agent_runtime.py (approve/resume/feedback/interactive trace APIs) + agent_tool_integration.py (step-level events, safe console output) + live_test_hitl_runtime.py** | **16/16 deterministic tests pass across HITL + safety suites; live LLM validation passed: manual approval pause, human approve→resume execution, auto-allow path, feedback revision, interactive trace events** |
+| **26 - Agent Evaluation & Testing** | **evaluation_runtime.py (`GoldenTask`, `EvalMetrics`, scoring helpers, default 15-task dataset, `AgentEvaluator`, `CostTracker`, `RegressionTracker`, JSON baselines, compatibility runner) + test_evaluation_runtime.py** | **8/8 deterministic evaluation tests pass; 18/18 combined evaluation + HITL runtime tests pass** |
+| **27 - Cost & Latency Optimization** | **optimization_runtime.py (`PromptCache`, `TokenBudgetManager`, `ModelRouter`, `RuntimeOptimizer`) + test_optimization_runtime.py + AgentRuntime integration** | **Optimization runtime tests pass; cache/budget/routing wired into the integrated runtime path** |
+| **28 - Error Handling & Resilience** | **resilience.py (`RetryWithFeedback`, `FallbackChain`, `CircuitBreaker`, `GracefulDegradation`, cross-platform timeout helpers, `SafeToolExecutor`) + test_resilience.py** | **9/9 resilience tests pass; 36/36 combined resilience + runtime integration/eval/optimization/HITL tests pass** |
 
-### ⬜ REMAINING (21 notebooks ahead)
+### ⬜ REMAINING (8 notebooks ahead)
 
-**Module 3 (Tool Engineering) is COMPLETE.** The next target in strict curriculum order is **Notebook 17: Multi-Agent Conversation**.
+**Modules 1-6 through Notebook 31 are now covered.** The next target in strict curriculum order is **Notebook 32: Project Architecture**.
 
-The full remaining curriculum spans 4 modules:
+The full remaining curriculum spans 2 modules:
 
-1. **Module 4**: Notebooks 17-23 (Multi-Agent: conversation, debate, pipelines, hierarchy, orchestration, blackboard, swarm)
-2. **Module 5**: Notebooks 24-28 (Production: safety, human-in-loop, evaluation, cost, resilience)
-3. **Module 6**: Notebooks 29-31 (Protocols: MCP, A2A, runtime)
-4. **Module 7**: Notebooks 32-37 (Capstone: Castalia Scholar 6-part project)
+1. **Module 6**: Notebooks 29-31 (Protocols: MCP, A2A, runtime)
+2. **Module 7**: Notebooks 32-37 (Capstone: Castalia Scholar 6-part project)
 
 ---
 
@@ -751,7 +791,7 @@ Inspired by OpenAI's Evals API: curated question-answer pairs with "golden" expe
 ## Part 5: Domain-Tutor Handoff Instructions
 
 ### Resume Point
-The learner has completed **Notebooks 01-16** (all 16 notebooks of Modules 1-3). The next target in strict curriculum order is **Notebook 17: Multi-Agent Conversation**.
+The learner has completed **Notebooks 01-31**. The next target in strict curriculum order is **Notebook 32: Project Architecture**.
 
 ### What the Tutor Should Do Next
 1. **Acknowledge the progress**: The learner has built a remarkably comprehensive 16-module custom system spanning Foundations → Single-Agent Patterns → Memory → Tool Engineering. Each notebook concept was not just understood but implemented, tested, and hardened against real LLM behavior.
@@ -808,10 +848,10 @@ The learner has completed **Notebooks 01-16** (all 16 notebooks of Modules 1-3).
 - 20 (hierarchical delegation) — Manager-worker pattern, decompose-delegate-aggregate
 - 21 (orchestration patterns) — Router Agent, conditional routing, parallel fan-out/fan-in
 - 22 (shared state/blackboard) — Shared workspace, event-driven, conflict resolution
-- 23 (swarm intelligence) — Decentralized agents, stigmergy, emergent behavior
+- 23 (swarm intelligence) — ✅ built in `swarm_intelligence.py` (offline deterministic tests, opt-in LLM mode, emergent sharing/verification loop)
 
 The full tool engineering foundation (code execution, web search, file/data tools) is now in place. Multi-agent systems will build on top of these — agents will use the existing tool registry, memory systems, and data tools as shared infrastructure.
 
 ---
 
-*Document generated 2026-05-06. Last updated 2026-05-07 with all curriculum content through Notebook 16 (File and Data Tools).*
+*Document generated 2026-05-06. Last updated 2026-05-10 with curriculum content through Notebook 23 (Swarm Intelligence); Notebook 22 (Shared State / Blackboard) remains next.*

@@ -298,11 +298,11 @@ def _try_extract_nested_action(text: str) -> Optional[Dict[str, str]]:
                     params = {k: v for k, v in params.items() if k != "tool"}
                 
                 result = {"action": "use_tool", "tool": tool, "params": params}
-                # Pass through thought from the wrapper or the nested action
-                for source in [data, nested]:
-                    if "thought" in source:
-                        result["thought"] = str(source["thought"]).strip()
-                        break
+                # Pass through thought from the nested action when present.
+                # Note: this helper receives only the nested text, so the outer
+                # wrapper dict is intentionally unavailable here.
+                if "thought" in nested:
+                    result["thought"] = str(nested["thought"]).strip()
                 return result
             
             elif nested_action in ["answer", "final_answer", "result"]:

@@ -15,11 +15,12 @@ import requests
 # Prefer explicit env var; fallback to config.py for centralized projects
 try:
     from config import get_tavily_api_key, get_tavily_base_url
-    TAVILY_API_KEY = get_tavily_api_key()
-    TAVILY_BASE_URL = get_tavily_base_url()
 except ImportError:
-    TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY", "")
-    TAVILY_BASE_URL = "https://api.tavily.com"
+    def get_tavily_api_key():
+        return os.environ.get("TAVILY_API_KEY", "")
+
+    def get_tavily_base_url():
+        return os.environ.get("TAVILY_BASE_URL", "https://api.tavily.com")
 
 DEFAULT_TIMEOUT = 30
 MAX_RESULTS_LIMIT = 20
@@ -103,10 +104,13 @@ def tavily_search(
         ValueError: If API key is not configured.
         requests.HTTPError: On 4xx/5xx from Tavily.
     """
-    if not TAVILY_API_KEY or TAVILY_API_KEY == "YOUR_TAVILY_API_KEY_HERE":
+    tavily_api_key = get_tavily_api_key()
+    tavily_base_url = get_tavily_base_url()
+
+    if not tavily_api_key or tavily_api_key == "YOUR_TAVILY_API_KEY_HERE":
         raise ValueError(
             "TAVILY_API_KEY not configured. Set the TAVILY_API_KEY environment variable "
-            "or update config.py with your Tavily API key."
+            "or update build-my-agent/.env with your Tavily API key."
         )
 
     if not query or not query.strip():
@@ -115,7 +119,7 @@ def tavily_search(
     max_results = max(1, min(int(max_results), MAX_RESULTS_LIMIT))
 
     payload = {
-        "api_key": TAVILY_API_KEY,
+        "api_key": tavily_api_key,
         "query": query.strip(),
         "max_results": max_results,
         "search_depth": search_depth,
@@ -126,7 +130,7 @@ def tavily_search(
 
     start = time.time()
     response = requests.post(
-        f"{TAVILY_BASE_URL}/search",
+        f"{tavily_base_url}/search",
         json=payload,
         timeout=timeout,
     )

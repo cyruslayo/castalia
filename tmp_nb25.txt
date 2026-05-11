@@ -1,0 +1,535 @@
+--- CELL 0 [markdown] ---
+# Notebook 25 \u2014 Human-in-the-Loop
+
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/cyruslayo/castalia/blob/main/agents/25_human_in_the_loop.ipynb)
+## Interactive Agent Systems with Human Oversight
+
+Agents make mistakes. Humans provide **judgment**, **approval**, and **course-correction**.
+
+| Pattern | Description | When to Use |
+|---------|-------------|------------|
+| Approval Gate | Agent proposes, human approves | High-risk actions |
+| Feedback Loop | Human critiques, agent revises | Creative tasks |
+| Escalation | Agent detects uncertainty, asks human | Low-confidence situations |
+| Interactive Mode | Human can intervene at any step | Debugging, exploration |
+
+**Prerequisites:** Notebooks 21\u201324 (orchestration, safety).
+--- CELL 1 [markdown] ---
+## \U0001f3af Learning Objectives
+
+By the end of this notebook, you will:
+
+- Understand **Interactive Agent Systems with Human Oversight**
+- Understand **Why Human-in-the-Loop?**
+- Understand **Approval Gates \u2014 Human Must Approve Before Execution**
+- Understand **Feedback Loops \u2014 Iterative Refinement with Human Input**
+- Understand **Escalation \u2014 Agent Detects Low Confidence, Asks Human**
+--- CELL 2 [code] ---
+# --- Google Colab Setup ---
+# Install dependencies (run once per session)
+!pip install -q transformers>=4.51.0 accelerate bitsandbytes torch
+
+import torch
+import time
+import json
+import re
+import math
+import inspect
+from dataclasses import dataclass, field
+from typing import List, Dict, Optional, Any, Callable, Tuple, Union, get_type_hints
+from collections import defaultdict
+from google.colab import drive
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+
+# Mount Google Drive for model caching (faster subsequent loads)
+drive.mount('/content/drive')
+CACHE_DIR = "/content/drive/MyDrive/models"
+
+# Load open-source model with 4-bit quantization (fits Colab T4 16GB GPU)
+MODEL_NAME = "Qwen/Qwen3-8B"
+
+quantization_config = BitsAndBytesConfig(
+    load_in_4bit=True,
+    bnb_4bit_compute_dtype=torch.bfloat16,
+    bnb_4bit_quant_type="nf4",
+)
+
+tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, cache_dir=CACHE_DIR)
+model = AutoModelForCausalLM.from_pretrained(
+    MODEL_NAME,
+    device_map="auto",
+    quantization_config=quantization_config,
+    cache_dir=CACHE_DIR,
+    torch_dtype="auto",
+)
+
+def generate(messages, max_new_tokens=512, temperature=0.7, do_sample=True):
+    """Generate a response from the model given a list of chat messages."""
+...
+--- CELL 3 [markdown] ---
+## 1. Why Human-in-the-Loop?
+
+Fully autonomous agents fail when:
+- Tasks require **judgment** that can't be formalized
+- Stakes are high (financial, legal, medical decisions)
+- The agent's **confidence is low** and it needs guidance
+- **Novel situations** outside training distribution
+- **Accountability** requires human sign-off
+
+HITL adds a human to the agent loop \u2014 not replacing automation, but **augmenting** it with human judgment at critical points.
+
+```
+         \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510     \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510
+Task \u2500\u2500\u25b6 \u2502  Agent   \u2502\u2500\u2500\u25b6\u2500\u2500\u2502  Human   \u2502\u2500\u2500\u25b6 Final Output
+         \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518     \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518
+              \u2502                \u2502
+         (proposes)      (approves/revises)
+```
+--- CELL 4 [code] ---
+# Simulated human responses for notebook reproducibility
+# In production, these would be actual input() calls or UI interactions
+class SimulatedHuman:
+    """Simulates human responses for reproducible notebook experiments."""
+
+    def __init__(self, name: str = "Human Reviewer"):
+        self.name = name
+        self.interactions: List[Dict] = []
+        self._response_queue: List[str] = []
+        self._default_approval = True
+
+    def set_responses(self, responses: List[str]):
+        """Pre-load responses for simulation."""
+        self._response_queue = list(responses)
+
+    def get_approval(self, proposal: str) -> bool:
+        """Simulate human approval decision."""
+        self.interactions.append({"type": "approval", "proposal": proposal[:100]})
+        if self._response_queue:
+            response = self._response_queue.pop(0)
+            approved = response.lower() in ("yes", "y", "approve", "true")
+        else:
+            approved = self._default_approval
+        print(f"  \U0001f464 [{self.name}]: {'APPROVED \u2713' if approved else 'REJECTED \u2717'}")
+        return approved
+
+    def get_feedback(self, content: str) -> str:
+        """Simulate human feedback."""
+        self.interactions.append({"type": "feedback", "content": content[:100]})
+        if self._response_queue:
+            feedback = self._response_queue.pop(0)
+        else:
+            feedback = "Looks good, minor improvements needed."
+        print(f"  \U0001f464 [{self.name}]: {feedback[:80]}")
+        return feedback
+
+    def get_choice(self, options: List[str]) -> int:
+        """Simulate human choosing from options."""
+        self.interactions.append({"type": "choice", "options": options})
+        if self._response_queue:
+...
+--- CELL 5 [markdown] ---
+## 2. Approval Gates \u2014 Human Must Approve Before Execution
+
+The agent proposes an action, but **waits for human approval** before executing. Critical for:
+- Tool calls with side effects (sending emails, modifying data)
+- Actions that are expensive or irreversible
+- Decisions with significant consequences
+--- CELL 6 [code] ---
+class ApprovalGate:
+    """Gate that requires human approval before proceeding."""
+
+    def __init__(self, human: SimulatedHuman, require_reason: bool = False):
+        self.human = human
+        self.require_reason = require_reason
+        self.approved_count = 0
+        self.rejected_count = 0
+        self.history: List[Dict] = []
+
+    def request_approval(self, action: str, details: str = "",
+                          risk_level: str = "medium") -> Dict[str, Any]:
+        """Request human approval for an action."""
+        print(f"  \U0001f512 Approval requested [{risk_level.upper()} risk]")
+        print(f"     Action: {action}")
+        if details:
+            print(f"     Details: {details[:100]}")
+
+        approved = self.human.get_approval(f"{action}: {details}")
+
+        if approved:
+            self.approved_count += 1
+        else:
+            self.rejected_count += 1
+
+        entry = {
+            "action": action, "details": details[:100],
+            "risk_level": risk_level, "approved": approved,
+            "timestamp": time.time()
+        }
+        self.history.append(entry)
+        return entry
+
+    def stats(self) -> Dict[str, Any]:
+        return {
+            "total": self.approved_count + self.rejected_count,
+            "approved": self.approved_count,
+            "rejected": self.rejected_count,
+            "approval_rate": self.approved_count / max(1, self.approved_count + self.rejected_count)
+        }
+...
+--- CELL 7 [markdown] ---
+## 3. Feedback Loops \u2014 Iterative Refinement with Human Input
+
+The agent generates output, the human provides **text feedback**, and the agent **revises**. This iterative loop continues until the human is satisfied.
+--- CELL 8 [code] ---
+class FeedbackLoop:
+    """Iterative generation-feedback-revision loop."""
+
+    def __init__(self, human: SimulatedHuman, max_iterations: int = 3):
+        self.human = human
+        self.max_iterations = max_iterations
+        self.iterations: List[Dict] = []
+
+    def run(self, task: str) -> Dict[str, Any]:
+        """Run the feedback loop until approval or max iterations."""
+        current_draft = None
+        t0 = time.time()
+
+        for i in range(self.max_iterations):
+            print(f"\n  --- Iteration {i + 1}/{self.max_iterations} ---")
+
+            # Generate or revise
+            if current_draft is None:
+                messages = [
+                    {"role": "system", "content": "You are an expert writer. Create a first draft. Be thorough but concise (3-5 sentences)."},
+                    {"role": "user", "content": task}
+                ]
+            else:
+                feedback = self.human.get_feedback(current_draft)
+                messages = [
+                    {"role": "system", "content": "You are an expert writer. Revise based on feedback. Keep improvements concise."},
+                    {"role": "user", "content": f"Previous draft:\n{current_draft}\n\nFeedback: {feedback}\n\nRevised version:"}
+                ]
+
+            draft = generate(messages, max_new_tokens=300)
+            current_draft = draft
+            print(f"  \U0001f4dd Draft: {draft[:150]}...")
+
+            self.iterations.append({
+                "iteration": i + 1,
+                "draft": draft,
+                "feedback": None if i == 0 else feedback
+            })
+
+            # Check if human approves
+...
+--- CELL 9 [markdown] ---
+## 4. Escalation \u2014 Agent Detects Low Confidence, Asks Human
+
+The agent monitors its own **confidence** and escalates to a human when uncertain.
+--- CELL 10 [code] ---
+class EscalationHandler:
+    """Handles escalation when agent confidence is low."""
+
+    def __init__(self, human: SimulatedHuman, confidence_threshold: float = 0.6):
+        self.human = human
+        self.threshold = confidence_threshold
+        self.escalations: List[Dict] = []
+        self.auto_handled: int = 0
+
+    def assess_confidence(self, task: str, response: str) -> float:
+        """Use LLM to self-assess confidence."""
+        messages = [
+            {"role": "system", "content": "Rate your confidence in this response on a scale of 0.0 to 1.0. Consider accuracy, completeness, and whether you might be wrong. Reply with ONLY a decimal number."},
+            {"role": "user", "content": f"Task: {task}\nResponse: {response}"}
+        ]
+        result = generate(messages, max_new_tokens=10, temperature=0.1, do_sample=False)
+        try:
+            confidence = float(re.search(r'(0\.\d+|1\.0|0|1)', result).group(1))
+        except:
+            confidence = 0.5
+        return confidence
+
+    def handle(self, task: str) -> Dict[str, Any]:
+        """Process task with escalation when confidence is low."""
+        # Generate response
+        messages = [
+            {"role": "system", "content": "You are a helpful assistant. Answer concisely and accurately. If you're unsure, say so."},
+            {"role": "user", "content": task}
+        ]
+        response = generate(messages, max_new_tokens=200)
+
+        # Assess confidence
+        confidence = self.assess_confidence(task, response)
+        print(f"  Confidence: {confidence:.2f} (threshold: {self.threshold})")
+
+        if confidence >= self.threshold:
+            self.auto_handled += 1
+            return {
+                "response": response,
+                "confidence": confidence,
+...
+--- CELL 11 [markdown] ---
+## 5. Interactive Mode \u2014 Human Can Intervene at Any Step
+
+The most hands-on pattern: the human can observe and intervene at **every step** of the agent's execution.
+--- CELL 12 [code] ---
+class InteractiveAgent:
+    """Agent where human can observe and intervene at each step."""
+
+    def __init__(self, name: str, human: SimulatedHuman):
+        self.name = name
+        self.human = human
+        self.steps: List[Dict] = []
+
+    def plan(self, task: str) -> List[str]:
+        """Generate a multi-step plan."""
+        messages = [
+            {"role": "system", "content": "Break this task into 3-4 concrete steps. List each step on a new line starting with a number."},
+            {"role": "user", "content": task}
+        ]
+        response = generate(messages, max_new_tokens=200)
+        steps = [line.strip() for line in response.split("\n")
+                 if line.strip() and line.strip()[0].isdigit()]
+        return steps[:4] if steps else [task]
+
+    def execute_step(self, step: str, context: str = "") -> str:
+        """Execute a single step."""
+        messages = [
+            {"role": "system", "content": f"You are {self.name}. Execute this step concisely (2-3 sentences)."},
+            {"role": "user", "content": f"Context: {context}\n\nStep to execute: {step}" if context else f"Step: {step}"}
+        ]
+        return generate(messages, max_new_tokens=200)
+
+    def run_interactive(self, task: str) -> Dict[str, Any]:
+        """Run task with human oversight at each step."""
+        print(f"\n  \U0001f4cb Planning: {task[:60]}...")
+        plan = self.plan(task)
+
+        print(f"  Generated {len(plan)} steps:")
+        for i, step in enumerate(plan):
+            print(f"    {i+1}. {step[:70]}")
+
+        # Human can approve/modify the plan
+        approved = self.human.get_approval("Execute this plan?")
+        if not approved:
+            return {"status": "plan_rejected", "plan": plan, "results": []}
+...
+--- CELL 13 [markdown] ---
+## 6. Experiment \u2014 Approval-Gated Tool Use
+
+Agent must request permission before **each tool call**. This prevents unintended side effects.
+--- CELL 14 [code] ---
+class ApprovalGatedToolUser:
+    """Agent that requests approval before each tool call."""
+
+    def __init__(self, human: SimulatedHuman):
+        self.human = human
+        self.tools = {
+            "web_search": lambda q: f"Search results for '{q}': [Result 1: overview...] [Result 2: tutorial...]",
+            "read_file": lambda f: f"Contents of {f}: [sample data...]",
+            "write_file": lambda f: f"Wrote to {f}",
+            "run_code": lambda c: f"Output of code: {c[:30]}... \u2192 [result]",
+            "send_notification": lambda m: f"Notification sent: {m[:50]}",
+        }
+        self.approved_calls: List[Dict] = []
+        self.rejected_calls: List[Dict] = []
+
+    def call_tool(self, tool_name: str, argument: str) -> Dict[str, Any]:
+        """Request approval then call tool."""
+        print(f"\n  \U0001f527 Tool request: {tool_name}({argument[:40]})")
+
+        if tool_name not in self.tools:
+            return {"status": "error", "result": f"Unknown tool: {tool_name}"}
+
+        approved = self.human.get_approval(f"Call {tool_name}({argument[:40]})?")
+
+        if approved:
+            result = self.tools[tool_name](argument)
+            self.approved_calls.append({"tool": tool_name, "arg": argument[:50]})
+            return {"status": "executed", "result": result}
+        else:
+            self.rejected_calls.append({"tool": tool_name, "arg": argument[:50]})
+            return {"status": "rejected", "result": f"Tool call rejected by human"}
+
+    def run_task(self, task: str) -> Dict[str, Any]:
+        """Plan and execute a task with approval-gated tools."""
+        messages = [
+            {"role": "system", "content": f"""You are a helpful assistant with tools: {list(self.tools.keys())}.
+For the given task, list 3-4 tool calls you'd make. Format each as: TOOL: name | ARG: argument"""},
+            {"role": "user", "content": task}
+        ]
+        plan = generate(messages, max_new_tokens=200)
+...
+--- CELL 15 [markdown] ---
+## 7. Experiment \u2014 Feedback-Driven Writing
+
+Agent writes a piece, human critiques it, agent revises. Multiple rounds of refinement.
+--- CELL 16 [code] ---
+class FeedbackDrivenWriter:
+    """Agent that writes and revises based on human feedback."""
+
+    def __init__(self, human: SimulatedHuman, max_rounds: int = 3):
+        self.human = human
+        self.max_rounds = max_rounds
+        self.drafts: List[Dict] = []
+
+    def write(self, task: str) -> Dict[str, Any]:
+        """Write with iterative human feedback."""
+        t0 = time.time()
+        current_draft = None
+
+        for round_num in range(1, self.max_rounds + 1):
+            print(f"\n  --- Round {round_num} ---")
+
+            if current_draft is None:
+                # First draft
+                messages = [
+                    {"role": "system", "content": "You are an expert writer. Write a clear, engaging piece. 4-6 sentences."},
+                    {"role": "user", "content": task}
+                ]
+            else:
+                # Revision based on feedback
+                feedback = self.human.get_feedback(current_draft)
+                messages = [
+                    {"role": "system", "content": "Revise the text based on feedback. Maintain quality while addressing all feedback points."},
+                    {"role": "user", "content": f"Current draft:\n{current_draft}\n\nFeedback: {feedback}\n\nRevised version:"}
+                ]
+
+            draft = generate(messages, max_new_tokens=300)
+            current_draft = draft
+            self.drafts.append({"round": round_num, "draft": draft})
+            print(f"  \U0001f4dd {draft[:150]}...")
+
+            # Check satisfaction
+            if round_num < self.max_rounds:
+                satisfied = self.human.get_approval(f"Satisfied with round {round_num}?")
+                if satisfied:
+                    break
+...
+--- CELL 17 [markdown] ---
+## 8. Comparison \u2014 Autonomous vs Approval-Gated vs Interactive
+
+Same task, three levels of human involvement. Which produces the best results?
+--- CELL 18 [code] ---
+# Run the same task with different HITL levels
+comparison_task = "Suggest three strategies for improving code quality in a software team"
+
+print("=" * 70)
+print("COMPARISON: Three Levels of Human Involvement")
+print("=" * 70)
+
+# Level 1: Fully Autonomous
+print("\n--- Level 1: FULLY AUTONOMOUS ---")
+t0 = time.time()
+auto_messages = [
+    {"role": "system", "content": "You are an expert software engineering consultant. Be concise and practical."},
+    {"role": "user", "content": comparison_task}
+]
+auto_result = generate(auto_messages, max_new_tokens=300)
+auto_time = time.time() - t0
+print(f"  Time: {auto_time:.1f}s")
+print(f"  Result: {auto_result[:200]}...")
+
+# Level 2: Approval-Gated
+print("\n--- Level 2: APPROVAL-GATED ---")
+approval_human = SimulatedHuman("Approver")
+approval_human.set_responses(["yes"])
+approval_gate = ApprovalGate(approval_human)
+
+t0 = time.time()
+gate_messages = [
+    {"role": "system", "content": "You are an expert software engineering consultant. Be concise and practical."},
+    {"role": "user", "content": comparison_task}
+]
+gate_result = generate(gate_messages, max_new_tokens=300)
+approval = approval_gate.request_approval("Deliver response", gate_result[:100])
+gate_time = time.time() - t0
+print(f"  Time: {gate_time:.1f}s (includes approval)")
+print(f"  Result: {gate_result[:200]}...")
+
+# Level 3: Interactive with Feedback
+print("\n--- Level 3: INTERACTIVE WITH FEEDBACK ---")
+interactive_human = SimulatedHuman("Coach")
+interactive_human.set_responses([
+...
+--- CELL 19 [code] ---
+# Summary comparison
+print("=" * 70)
+print("HITL COMPARISON SUMMARY")
+print("=" * 70)
+print(f"""
+Level              \u2502 Time    \u2502 Human Effort \u2502 Quality Control \u2502 Best For
+\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+1. Autonomous      \u2502 {auto_time:>5.1f}s  \u2502 None         \u2502 None            \u2502 Low-risk, routine
+2. Approval-gated  \u2502 {gate_time:>5.1f}s  \u2502 1 decision   \u2502 Pass/fail       \u2502 Medium-risk actions
+3. Interactive     \u2502 {interactive_time:>5.1f}s  \u2502 Multi-turn   \u2502 Iterative       \u2502 High-stakes, creative
+
+Trust spectrum:
+  Full automation \u25c4\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u25ba Full human control
+  Fast, scalable                           Slow, high quality
+  Risk of errors                           Human bottleneck
+
+Recommendation:
+  \u2022 Start with approval gates for new agent deployments
+  \u2022 Move to autonomous mode as trust builds
+  \u2022 Keep interactive mode for high-stakes or novel tasks
+  \u2022 Log everything for continuous improvement
+""")
+--- CELL 20 [markdown] ---
+## \U0001f3cb\ufe0f Exercises
+
+Put your understanding to the test:
+
+**Exercise 1 \u2014 Explore:** extend the agent with a new tool. Document what changes and why.
+
+**Exercise 2 \u2014 Build:** add error handling for a failure mode discussed in this notebook. Compare your implementation to the one in this notebook.
+
+**Exercise 3 \u2014 Extend:** trace through the agent loop manually and predict the output before running.
+--- CELL 21 [markdown] ---
+## 9. Key Takeaways
+
+### HITL Patterns
+1. **Approval Gates** \u2014 simple pass/fail before execution; good for tool calls with side effects
+2. **Feedback Loops** \u2014 iterative refinement; best for creative/writing tasks
+3. **Escalation** \u2014 agent self-assesses confidence; efficient use of human time
+4. **Interactive Mode** \u2014 maximum control; human supervises every step
+
+### Design Principles
+- **Progressive autonomy** \u2014 start supervised, gradually increase automation as trust builds
+- **Selective intervention** \u2014 humans should focus on high-value decisions, not routine checks
+- **Graceful degradation** \u2014 system should work (at reduced speed) even without human availability
+- **Audit trail** \u2014 log every human interaction for learning and accountability
+
+### When to Use Each Pattern
+| Pattern | Human Effort | Best For |
+|---------|-------------|----------|
+| Approval Gate | Low (yes/no) | Tool calls, deployments |
+| Feedback Loop | Medium (text input) | Writing, creative tasks |
+| Escalation | Variable (on-demand) | Knowledge-intensive work |
+| Interactive | High (per-step) | Debugging, novel tasks |
+
+### Production Considerations
+- Use **timeouts** \u2014 don't block indefinitely waiting for human input
+- Implement **delegation** \u2014 if the primary human is unavailable, escalate to a backup
+- Track **approval latency** \u2014 identify bottlenecks in the human review process
+- Use **batch review** \u2014 group similar low-risk items for efficient human review
+
+### Course Progress
+This completes the **Advanced Agent Patterns** section:
+- \u2705 Notebook 21: Orchestration patterns
+- \u2705 Notebook 22: Shared state & blackboard
+- \u2705 Notebook 23: Swarm intelligence
+- \u2705 Notebook 24: Safety & guardrails
+- \u2705 Notebook 25: Human-in-the-loop
+--- CELL 22 [markdown] ---
+## \U0001f4da References & Further Reading
+
+- [Hugging Face Documentation](https://huggingface.co/docs)
+- [LLM Course Resources](https://github.com/cyruslayo/castalia)
+- Explore related notebooks in the agents/ directory
+--- CELL 23 [markdown] ---
+---
+
+## \U0001f9ed Navigation
+
+\u2b05\ufe0f **Previous:** [24 Agent Safety And Guardrails](https://colab.research.google.com/github/cyruslayo/castalia/blob/main/agents/24_agent_safety_and_guardrails.ipynb) | \u27a1\ufe0f **Next:** [26 Agent Evaluation And Testing](https://colab.research.google.com/github/cyruslayo/castalia/blob/main/agents/26_agent_evaluation_and_testing.ipynb)

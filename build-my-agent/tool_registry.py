@@ -54,9 +54,9 @@ class ToolResult:
             "tool": self.tool_name,
             "execution_time_ms": round(self.execution_time * 1000, 1),
         }
-        if self.success:
+        if self.result is not None:
             d["result"] = self.result
-        else:
+        if not self.success:
             d["error"] = self.error
         return d
 
@@ -215,12 +215,12 @@ class ToolRegistry:
         self.definitions: Dict[str, ToolDefinition] = {}
         self.call_history: List[dict] = []
 
-    def register(self, definition: ToolDefinition, func: Callable) -> None:
+    def register(self, definition: ToolDefinition, func: Callable, warn_on_overwrite: bool = True) -> None:
         """Register a tool with its definition. Validates the definition."""
         assert definition.name, "Tool must have a name"
         assert definition.description, "Tool must have a description"
         assert callable(func), "Tool function must be callable"
-        if definition.name in self.tools:
+        if definition.name in self.tools and warn_on_overwrite:
             print(f"  Warning: Overwriting existing tool: {definition.name}")
         self.tools[definition.name] = func
         self.definitions[definition.name] = definition
